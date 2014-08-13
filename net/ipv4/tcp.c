@@ -658,13 +658,10 @@ ssize_t tcp_splice_read(struct socket *sock, loff_t *ppos,
 			}
 			if (sk->sk_shutdown & RCV_SHUTDOWN)
 			{
-
-/*				SH - 04/15/11 - removed print, these were filling up logs in some environments
 				printk(KERN_ERR "%s:%s:%d\n"
 						"breaking %d\n",
 						__FUNCTION__, __FILE__, __LINE__, 
 						ret);
-*/
 				break;
 			}
 			if (sk->sk_state == TCP_CLOSE) {

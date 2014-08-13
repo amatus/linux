@@ -2599,22 +2599,20 @@ static long do_splice_2(int fd_in, struct file *in, loff_t __user *off_in,
 			/** handle error status */
 			if( ret <= 0 ) 
 			{
-#ifdef DEBUG_SPLICE
 				printk( KERN_ERR "%s:%s:%d\n"
 							"sock_splice_read read error %ld.\n",
 						    __FILE__, __FUNCTION__, __LINE__, 
 							ret );
-#endif
+
 				/** fail on specific errors */
 				if ( ret == 0 || ! ignore_splice_error ( ret ) )
 				{
-#ifdef DEBUG_SPLICE
 					printk( KERN_ERR "%s:%s:%d\n"
 								"returning read error %ld "
 								"after reading %d out of %d bytes.\n",
 								__FILE__, __FUNCTION__, __LINE__, 
 								ret, spliced_len, len );
-#endif
+
 					release_splice_pipebufs_special(pipe);
 					goto out;
 				}	

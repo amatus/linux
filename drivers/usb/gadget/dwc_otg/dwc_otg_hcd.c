@@ -273,6 +273,7 @@ static int32_t dwc_otg_hcd_disconnect_cb(void *_p)
 		dwc_hc_t * channel;
 		dwc_otg_hc_regs_t * hc_regs;
 		hcchar_data_t hcchar;
+		unsigned long flags;
 		num_channels = dwc_otg_hcd->core_if->core_params->host_channels;
 		if (!dwc_otg_hcd->core_if->dma_enable) {
 		    /* Flush out any channel requests in slave mode. */
@@ -303,6 +304,10 @@ static int32_t dwc_otg_hcd_disconnect_cb(void *_p)
 				dwc_otg_hc_cleanup(dwc_otg_hcd->core_if,channel);
 				list_add_tail(&channel->hc_list_entry,
 					       &dwc_otg_hcd->free_hc_list);
+				local_irq_save(flags);
+				dwc_otg_hcd->available_host_channels ++;
+				local_irq_restore(flags);
+				
 			}
 		}
 	}
@@ -1042,23 +1047,38 @@ void dwc_otg_hcd_endpoint_disable(struct usb_hcd *_hcd,
 {
 	dwc_otg_qh_t * qh;
 	dwc_otg_hcd_t * dwc_otg_hcd = hcd_to_dwc_otg_hcd(_hcd);
+	unsigned long flags;
+	int retry = 0;
+
 	DWC_DEBUGPL(DBG_HCD, "DWC OTG HCD EP DISABLE: _bEndpointAddress=0x%02x, "
 		      "endpoint=%d\n", _ep->desc.bEndpointAddress,
 		      dwc_ep_addr_to_endpoint(_ep->desc.bEndpointAddress));
+
+rescan:
+	local_irq_save(flags);
+
 	qh = (dwc_otg_qh_t *) (_ep->hcpriv);
 	if (qh != NULL) {
 
-#ifdef CONFIG_DWC_DEBUG
 		/** Check that the QTD list is really empty */
 	    if (!list_empty(&qh->qtd_list)) {
+		if (retry++ < 250) {
+			local_irq_restore(flags);
+			schedule_timeout_uninterruptible(1);
+			goto rescan;
+		}
+#ifdef CONFIG_DWC_DEBUG
 			DWC_WARN("DWC OTG HCD EP DISABLE:"
 				  " QTD List for this endpoint is not empty\n");
+#endif	/*  */
 		}
 
-#endif	/*  */
 	    dwc_otg_hcd_qh_remove_and_free(dwc_otg_hcd, qh);
 		_ep->hcpriv = NULL;
 	}
+
+	local_irq_restore(flags);
+
 	return;
 }
 

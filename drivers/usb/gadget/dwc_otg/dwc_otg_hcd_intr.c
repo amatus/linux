@@ -665,6 +665,7 @@ static dwc_otg_halt_status_e update_isoc_urb_state(dwc_otg_hcd_t * _hcd,
 		frame_desc->status = -EPROTO;
 		frame_desc->actual_length =
 		    get_actual_xfer_length(_hc, _hc_regs, _qtd, _halt_status,NULL);
+		break;
 	default:
 		DWC_ERROR("%s: Unhandled _halt_status (%d)\n", __func__, _halt_status);
 		BUG();
@@ -752,7 +753,8 @@ static void release_channel(dwc_otg_hcd_t * _hcd,
 		DWC_ERROR("%s: No halt_status, channel %d\n", __func__,
 			   _hc->hc_num);
 #endif
-		free_qtd = 0;
+		free_qtd = 1;
+		dwc_otg_hcd_complete_urb(_hcd, _qtd->urb, -EPROTO);
 		break;
 	default:
 		free_qtd = 0;
@@ -1197,6 +1199,7 @@ static int32_t handle_hc_ack_intr(dwc_otg_hcd_t * _hcd,
 			halt_channel(_hcd, _hc, _qtd, DWC_OTG_HC_XFER_ACK, must_free);
 		}
 	} else {
+#if 0
 		_qtd->error_count = 0;
 		if (_hc->qh->ping_state) {
 			_hc->qh->ping_state = 0;
@@ -1212,6 +1215,7 @@ static int32_t handle_hc_ack_intr(dwc_otg_hcd_t * _hcd,
 		} else {
 		    halt_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 		}
+#endif
 	}
 
     /*
@@ -1638,7 +1642,7 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t * _hcd,
 			     __func__, _hc->hc_num, hcint.b.nyet, hcint.d32,
 				 dwc_read_reg32(&_hcd->core_if->core_global_regs->gintsts));
 #endif
-			halt_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
+			halt_channel(_hcd, _hc, _qtd, DWC_OTG_HC_XFER_NO_HALT_STATUS, must_free);
 		}
 	}
 }

@@ -46,6 +46,7 @@ static int trustees_capable(struct task_struct *tsk, const struct cred *cred,
 			    int cap,
 			    int audit);
 static int trustees_inode_permission(struct inode *inode, int mask);
+static int trustees_inode_setattr(struct dentry *dentry, struct iattr *attr);
 
 /* Checks if user has access to the inode due to root status
  */
@@ -243,6 +244,7 @@ static int trustees_inode_link(struct dentry *old_dentry,
 struct security_operations trustees_security_ops = {
 	.capable = trustees_capable,
 	.inode_permission = trustees_inode_permission,
+	.inode_setattr = trustees_inode_setattr,
 	.inode_link = trustees_inode_link,
 	.inode_rename = trustees_inode_rename
 };
@@ -341,6 +343,17 @@ out_path:
 	return ret;
 }
 
+static int trustees_inode_setattr(struct dentry *dentry, struct iattr *attr)
+{
+	unsigned int ia_valid = attr->ia_valid;
+	int ret = 0;
+	/* This covers the case of setting the inode time (CAP_FOWNER). */
+	if (ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)) {
+		ret = trustees_inode_permission(dentry->d_inode, MAY_WRITE);
+	}
+	return ret;
+}
+
 /* We should only allow hard links under one of two conditions:
  *   1. Its in the same trustee
  *        - if the two dentries are covered by the same trustee, there shouldn't
@@ -398,7 +411,7 @@ static int trustees_capable(struct task_struct *tsk, const struct cred *cred,
 			    int cap,
 			    int audit)
 {
-	if (cap == CAP_DAC_OVERRIDE)
+	if (cap == CAP_DAC_OVERRIDE || cap == CAP_FOWNER)
 		return 0;
 
 	return cap_capable(tsk, cred, cap, audit);

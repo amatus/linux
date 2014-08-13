@@ -91,27 +91,7 @@ u8 write_3gled( u8 mask ,u8 value ) {
 static enum led_brightness a3g_led_get( struct led_classdev * led_cdev ) {
    unsigned char readval;
 
-   readval = readb(led_port);
-   if( (readval & _3G_BIT_LED_ALL) == _3G_BIT_LED_RED ) {
-      readval = _3G_LED_RED;
-   }
-   else if( (readval & _3G_BIT_LED_ALL) == _3G_BIT_LED_GREEN ) {
-      readval = _3G_LED_GREEN;
-   }
-   else if( (readval & _3G_BIT_LED_ALL) == _3G_BIT_LED_BLUE ) {
-      readval = _3G_LED_BLUE;
-   }
-   else if( (readval & _3G_BIT_LED_ALL) == _3G_BIT_LED_YELLOW ) {
-      readval = _3G_LED_YELLOW;
-   }
-   else if( (readval & _3G_BIT_LED_ALL) == _3G_BIT_LED_ALL ) {
-      readval = _3G_LED_ALL;
-   }
-   else if( (readval & _3G_BIT_LED_ALL) == _3G_BIT_LED_OFF ) {
-      readval = _3G_LED_OFF;
-   }
- 
-   return readval;
+   return led_state.cur_color;
 }
 
 /****************************************************/

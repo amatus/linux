@@ -162,7 +162,7 @@ static void trng4xx_chk_overflow(void)
 	} __attribute__((packed));
 
 
-	rc = trng4xx_hw_write32(TRNG4XX_ALARMCNT_ADDR, val);
+	rc = trng4xx_hw_read32(TRNG4XX_ALARMCNT_ADDR, &val);
 	if (rc != 0)
 		return;
 

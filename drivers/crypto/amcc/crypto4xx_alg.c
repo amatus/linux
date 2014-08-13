@@ -366,7 +366,6 @@ int crypto4xx_compute_gcm_hash_key_sw(struct crypto4xx_ctx *ctx,
 		goto out;
 	crypto4xx_memcpy_le(ctx->sa_in +
 			get_dynamic_sa_offset_inner_digest(ctx), src, 16);
-
 out:
 	crypto_free_blkcipher(aes_tfm);
 	return rc;
@@ -471,6 +470,7 @@ static int crypto4xx_setkey_3des(struct crypto_ablkcipher *cipher,
 	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
 
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 }
 
@@ -516,6 +516,8 @@ int crypto4xx_encrypt(struct ablkcipher_request *req)
 	ctx->is_hash = 0;
 	ctx->pd_ctl = 0x1;
 
+	CRYPTO4XX_TXLOG("encrypt %s nbytes %d",
+			req->base.tfm->__crt_alg->cra_name, req->nbytes);
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
 				   req->nbytes, NULL, 0, req->info,
 				   get_dynamic_sa_iv_size(ctx));
@@ -530,6 +532,8 @@ int crypto4xx_decrypt(struct ablkcipher_request *req)
 	ctx->pd_ctl = 0x1;
 	ctx->direction = DIR_INBOUND;
 
+	CRYPTO4XX_TXLOG("decrypt %s nbytes %d",
+			req->base.tfm->__crt_alg->cra_name, req->nbytes);
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
 				   req->nbytes, NULL, 0, req->info,
 				   get_dynamic_sa_iv_size(ctx));
@@ -545,6 +549,8 @@ int crypto4xx_encrypt_ctr(struct ablkcipher_request *req)
 	ctx->pd_ctl = 0x1;
 	ctx->direction = DIR_OUTBOUND;
 
+	CRYPTO4XX_TXLOG("encrypt %s nbytes %d",
+			req->base.tfm->__crt_alg->cra_name, req->nbytes);
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
 				  req->nbytes, NULL, 0,
 				  req->info,
@@ -561,6 +567,8 @@ int crypto4xx_decrypt_ctr(struct ablkcipher_request *req)
 	ctx->pd_ctl = 0x1;
 	ctx->direction = DIR_INBOUND;
 
+	CRYPTO4XX_TXLOG("decrypt %s nbytes %d",
+			req->base.tfm->__crt_alg->cra_name, req->nbytes);
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
 				  req->nbytes, NULL, 0,
 				  req->info,
@@ -637,6 +645,7 @@ static int crypto4xx_setkey_aes(struct crypto_ablkcipher *cipher,
 	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
 			
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 }
 
@@ -728,6 +737,7 @@ int crypto4xx_setkey_aes_ctr(struct crypto_ablkcipher *cipher,
 	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
 
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 }
 
@@ -856,7 +866,8 @@ int crypto4xx_setkey_aes_gcm(struct crypto_aead *cipher,
 	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
 	sa->sa_command_0.bf.opcode = SA_OPCODE_ENCRYPT_HASH;
-	
+
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 err:
 	crypto4xx_free_sa(ctx);
@@ -871,6 +882,8 @@ int crypto4xx_encrypt_aes_gcm(struct aead_request *req)
 	ctx->direction = DIR_OUTBOUND;
 	ctx->append_icv = 1;
 
+	CRYPTO4XX_TXLOG("encrypt %s nbytes %d",
+			req->base.tfm->__crt_alg->cra_name, req->cryptlen);
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
 				  req->cryptlen, req->assoc, req->assoclen,
 				  req->iv, crypto_aead_ivsize(aead));
@@ -882,6 +895,8 @@ int crypto4xx_decrypt_aes_gcm(struct aead_request *req)
 	struct crypto4xx_ctx *ctx  = crypto_tfm_ctx(req->base.tfm);
 	int len = req->cryptlen - crypto_aead_authsize(aead);
 
+	CRYPTO4XX_TXLOG("decrypt %s nbytes %d",
+			req->base.tfm->__crt_alg->cra_name, req->cryptlen);
 	ctx->direction = DIR_INBOUND;
 	ctx->append_icv = 0;
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
@@ -993,7 +1008,7 @@ int crypto4xx_setkey_aes_ccm(struct crypto_aead *cipher, const u8 *key,
 				 SA_SEQ_MASK_OFF, SA_MC_ENABLE,
 				 SA_NOT_COPY_PAD, SA_COPY_PAYLOAD,
 				 SA_NOT_COPY_HDR);
-
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 }
 
@@ -1153,6 +1168,7 @@ int crypto4xx_setkey_kasumi(struct crypto_ablkcipher *cipher,
 	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
 
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 }
 
@@ -1185,6 +1201,8 @@ int crypto4xx_encrypt_kasumi(struct ablkcipher_request *req)
 	ctx->direction = DIR_OUTBOUND;
 	ctx->pd_ctl = 0x1;
 
+	CRYPTO4XX_TXLOG("encrypt %s nbytes %d",
+		     req->base.tfm->__crt_alg->cra_name, req->nbytes);
 	return crypto4xx_build_pd(&req->base, ctx, req->src, req->dst,
 				  req->nbytes, NULL, 0, NULL, 0);
 }
@@ -1315,7 +1333,7 @@ int crypto4xx_setkey_arc4(struct crypto_ablkcipher *cipher,
 	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
 
-
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 }
 
@@ -1460,6 +1478,11 @@ int crypto4xx_hash_digest(struct ahash_request *req)
 	ctx->pd_ctl = 0x11;
 	ctx->direction = DIR_INBOUND;
 
+#if 0
+	ESP_PHD(KERN_CONT, "", DUMP_PREFIX_OFFSET,
+		16, 1,
+		(void*)req, sizeof(struct ahash_request), false);
+#endif
 	return crypto4xx_build_pd(&req->base, ctx, req->src,
 				  (struct scatterlist *) req->result,
 				  req->nbytes, NULL, 0, NULL, 0);
@@ -1550,7 +1573,8 @@ int crypto4xx_hash_hmac_setkey(struct crypto_ahash *hash,
 	memcpy(ctx->sa_out, ctx->sa_in, ctx->sa_len * 4);
 	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
-
+	
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 err:
 	crypto4xx_free_sa(ctx);
@@ -1799,7 +1823,7 @@ int crypto4xx_xcbc_setkey(struct crypto_ahash *hash,
 	memcpy(ctx->sa_out, ctx->sa_in, ctx->sa_len * 4);
 	sa = (struct dynamic_sa_ctl *) ctx->sa_out;
 	sa->sa_command_0.bf.dir = DIR_OUTBOUND;
-
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 err:
 	crypto4xx_free_sa(ctx);
@@ -1872,7 +1896,7 @@ int crypto4xx_kasumi_f9_setkey(struct crypto_ahash *hash,
 	ctx->hash_final = 1;
 	ctx->pd_ctl = 0x11;
 	ctx->bypass = 4;
-
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 }
 
@@ -2093,7 +2117,7 @@ int crypto4xx_setkey_esp_tunnel(struct crypto_aead *cipher,
 	ctx->is_hash = 0;
 	ctx->pad_ctl = param->pad_block_size/4;
 	ctx->append_icv = 0;
-
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 
 err_nomem_sr:
@@ -3021,7 +3045,7 @@ int crypto4xx_setkey_macsec_gcm(struct crypto_aead *cipher,
 	ctx->hash_final = 1;
 	ctx->is_hash = 0;
 	ctx->bypass = 0;
-	
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 
 err_nomem_sr:
@@ -3177,6 +3201,7 @@ static int crypto4xx_setkey_dtls(struct crypto_aead *cipher,
 				 CRYPTO_FEEDBACK_MODE_NO_FB, SA_EXTENDED_SN_ON,
 				 SA_SEQ_MASK_OFF, SA_MC_ENABLE,
 				 SA_COPY_PAD, SA_COPY_PAYLOAD, SA_COPY_HDR);
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 
 err_nomem_sr:
@@ -3413,7 +3438,7 @@ static int crypto4xx_setkey_ssl_tls(struct crypto_aead *cipher,
 				 SA_COPY_PAD,
 				 SA_COPY_PAYLOAD,
 				 SA_COPY_HDR);
-
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 
 err_nomem_sr:
@@ -3617,7 +3642,8 @@ int crypto4xx_setkey_ssl_tls_arc4(struct crypto_aead *cipher,
 
 	sa->sa_command_1.bf.arc4_stateful = 1;
 	sa->sa_command_1.bf.save_arc4_state = 1;
-
+	
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 
 err_nomem_arc4:
@@ -4070,11 +4096,11 @@ int crypto4xx_setkey_transport_esp_rfc4106_gcm(struct crypto_aead *cipher,
 	ctx->authenc = 0;
 	ctx->hash_final = 1;
 	ctx->is_hash = 0;
-	printk("param->pad_block_size = %d\n", param->pad_block_size);
 	//ctx->pad_ctl = param->pad_block_size / 4;
 	ctx->pad_ctl = 0x08;
 	ctx->append_icv = 0;
 
+	CRYPTO4XX_DEBUG("alg %s setkey", crypto_tfm_alg_name(tfm));
 	return 0;
 
 err_nomem_sr:

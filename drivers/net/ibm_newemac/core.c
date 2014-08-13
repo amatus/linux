@@ -1365,8 +1365,10 @@ static int emac_open(struct net_device *ndev)
 {
 	struct emac_instance *dev = netdev_priv(ndev);
 	int err, i;
+	unsigned long flags;
 
 	DBG(dev, "open" NL);
+
 
 	/* Setup error IRQ handler */
 	err = request_irq(dev->emac_irq, emac_irq, 0, "EMAC", dev);
@@ -1385,6 +1387,7 @@ static int emac_open(struct net_device *ndev)
 			return err;
 		}
 	}
+
 	/* Allocate RX ring */
 	for (i = 0; i < NUM_RX_BUFF; ++i)
 		if (emac_alloc_rx_skb(dev, i, GFP_KERNEL)) {
@@ -1443,16 +1446,23 @@ static int emac_open(struct net_device *ndev)
 	/* Required for Pause packet support in EMAC */
 	dev_mc_add(ndev, default_mcast_addr, sizeof(default_mcast_addr), 1);
 
+	local_irq_save(flags);	/* disable interrupts */
 	emac_configure(dev);
+
 	mal_poll_add(dev->mal, &dev->commac);
 	mal_enable_tx_channel(dev->mal, dev->mal_tx_chan);
 	mal_set_rcbs(dev->mal, dev->mal_rx_chan, emac_rx_size(ndev->mtu));
+
 	mal_enable_rx_channel(dev->mal, dev->mal_rx_chan);
 	emac_tx_enable(dev);
 	emac_rx_enable(dev);
+	local_irq_restore(flags);
+
 	emac_netif_start(dev);
 
+
 	mutex_unlock(&dev->link_lock);
+
 
 	return 0;
  oom:
@@ -1962,6 +1972,9 @@ static inline int emac_rx_sg_append(struct emac_instance *dev, int slot)
 			dev_kfree_skb(dev->rx_sg_skb);
 			dev->rx_sg_skb = NULL;
 		} else {
+			if(unlikely((dev->rx_sg_skb->tail + len) > dev->rx_sg_skb->end))
+				goto out;
+					
 			cacheable_memcpy(skb_tail_pointer(dev->rx_sg_skb),
 					 dev->rx_skb[slot]->data, len);
 			skb_put(dev->rx_sg_skb, len);
@@ -1969,6 +1982,7 @@ static inline int emac_rx_sg_append(struct emac_instance *dev, int slot)
 			return 0;
 		}
 	}
+out:
 	emac_recycle_rx_skb(dev, slot, 0);
 	return -1;
 }
@@ -2027,6 +2041,7 @@ static int emac_poll_rx(void *param, int budget)
 			goto oom;
 
 		skb_put(skb, len);
+
 	push_packet:
 		skb->dev = dev->ndev;
 		skb->protocol = eth_type_trans(skb, dev->ndev);
@@ -3071,7 +3086,7 @@ static int __devinit emac_init_phy(struct emac_instance *dev)
 	}
 
 	emac_configure(dev);
-
+	
 	if (dev->phy_address != 0xffffffff)
 		phy_map = ~(1 << dev->phy_address);
 
@@ -3105,6 +3120,7 @@ static int __devinit emac_init_phy(struct emac_instance *dev)
 
 	/* Disable any PHY features not supported by the platform */
 	dev->phy.def->features &= ~dev->phy_feat_exc;
+	dev->phy.features &= ~dev->phy_feat_exc;
 
 	/* Setup initial link parameters */
 	if (dev->phy.features & SUPPORTED_Autoneg) {
@@ -3537,6 +3553,11 @@ static int __devinit emac_probe(struct of_device *ofdev,
 	INIT_DELAYED_WORK(&dev->link_work, emac_link_timer);
 
 	/* Find PHY if any */
+#if defined(CONFIG_APM82181)
+	dev->phy_feat_exc = (SUPPORTED_1000baseT_Half |
+                                SUPPORTED_100baseT_Half |
+                                SUPPORTED_10baseT_Half);
+#endif
 	err = emac_init_phy(dev);
 	if (err != 0)
 		goto err_detach_tah;

@@ -50,6 +50,50 @@
 #define PD_ENTRY_FREE				0
 #define ERING_WAS_FULL				0xffffffff
 
+#if 0
+#define CRYPTO4XX_DEBUG_LOG
+#define CRYPTO4XX_TXDEBUG
+#endif
+
+/* Debugging Macro */
+#define CRYPTO4XX_HDR	"CRYPTO4XX: "
+
+#define CRYPTO4XX_ERR(fmt, ...) 	\
+		printk(KERN_ERR CRYPTO4XX_HDR fmt "\n", ##__VA_ARGS__);
+#define CRYPTO4XX_LOG(fmt, ...) 	\
+		printk(KERN_INFO CRYPTO4XX_HDR fmt "\n", ##__VA_ARGS__);
+		
+#if !defined(CRYPTO4XX_TXDEBUG)
+# define CRYPTO4XX_TXLOG(fmt, ...)
+# define CRYPTO4XX_TXDUMP(hdr, d, l)
+#else
+# define CRYPTO4XX_TXLOG(fmt, ...)		\
+	do { \
+		printk(KERN_INFO CRYPTO4XX_HDR fmt "\n", ##__VA_ARGS__); \
+} while(0);
+# define CRYPTO4XX_TXDUMP(hdr, d, l)	\
+	do { \
+		print_hex_dump(KERN_INFO, CRYPTO4XX_HDR hdr, \
+			DUMP_PREFIX_ADDRESS, 16, 4,  d, l, 1); \
+} while(0);
+#endif
+
+#if !defined(CRYPTO4XX_DEBUG_LOG)
+# define CRYPTO4XX_DEBUG(fmt, ...)
+# define CRYPTO4XX_DEBUG_DUMP(hdr, fmt, ...)
+#else
+# define CRYPTO4XX_DEBUG(fmt, ...)		\
+	do { \
+		printk(KERN_INFO CRYPTO4XX_HDR fmt "\n", ##__VA_ARGS__); \
+} while(0);
+# define CRYPTO4XX_DEBUG_DUMP(hdr, d, l)	\
+	do { \
+		print_hex_dump(KERN_INFO, CRYPTO4XX_HDR hdr, \
+			DUMP_PREFIX_ADDRESS, 16, 4,  d, l, 1); \
+} while(0);
+#endif
+
+
 struct crypto4xx_device;
 
 struct pd_uinfo {

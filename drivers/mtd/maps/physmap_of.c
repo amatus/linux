@@ -228,6 +228,7 @@ static int __devinit of_flash_probe(struct of_device *dev,
 				" tree\n");
 			goto err_out;
 		}
+
 		dev_dbg(&dev->dev, "of_flash device: %.8llx-%.8llx\n",
 			(unsigned long long)res.start,
 			(unsigned long long)res.end);
@@ -345,6 +346,12 @@ err_flash_remove:
 }
 
 static struct of_device_id of_flash_match[] = {
+#ifndef CONFIG_APOLLO3G
+	{
+		.compatible	= "cfi-flash",
+		.data		= (void *)"cfi_probe",
+	},
+#endif
 	{
 		/* FIXME: JEDEC chips can't be safely and reliably
 		 * probed, although the mtd code gets it right in
@@ -356,10 +363,12 @@ static struct of_device_id of_flash_match[] = {
 		.compatible	= "jedec-flash",
 		.data		= (void *)"jedec_probe",
 	},
+#ifdef CONFIG_APOLLO3G
 	{
 		.compatible	= "cfi-flash",
 		.data		= (void *)"cfi_probe",
 	},
+#endif
 	{
 		.compatible     = "mtd-ram",
 		.data           = (void *)"map_ram",

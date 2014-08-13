@@ -1279,9 +1279,10 @@ u32 crypto4xx_build_pd(struct crypto_async_request *req,
 				 */
 				crypto4xx_memcpy_le(pd_uinfo->sr_va +
 					CTR_RFC3686_NONCE_SIZE, iv, iv_len);
-			} else
+			} else {
 				crypto4xx_memcpy_le(pd_uinfo->sr_va,
 						iv, iv_len);
+			}
 		}
 		if (ctx->is_gcm || ctx->ctr_aes) {
 			u32 seq = 1;
@@ -1444,14 +1445,15 @@ u32 crypto4xx_build_pd(struct crypto_async_request *req,
 	pd_uinfo->state = PD_ENTRY_INUSE;
 	wmb();
 	/* write any value to push engine to read a pd */
+
 	if (dev->core_dev->revb_ver == 1) {
 #ifndef CONFIG_SEC_HW_POLL
 		writel(1, dev->ce_base + CRYPTO4XX_INT_DESCR_RD);
 #endif
-	} else 
+	} else {
 		writel(1, dev->ce_base + CRYPTO4XX_INT_DESCR_RD);
+	}
 
-		
 	dev->pkt_cnt++;
 	return -EINPROGRESS;
 }
@@ -1596,14 +1598,16 @@ static irqreturn_t crypto4xx_ce_interrupt_handler(int irq, void *data)
 {
 	struct device *dev = (struct device *)data;
 	struct crypto4xx_core_device *core_dev = dev_get_drvdata(dev);
-	//u32 int_status;
+	u32 int_status, dev_status;
 
 	if (core_dev->dev->ce_base == 0)
 		return 0;
 
-	//int_status = readl(core_dev->dev->ce_base + CRYPTO4XX_INT_UNMASK_STAT);
-	//printk("Interrupt status = 0x%08x\n", int_status);
+	int_status = readl(core_dev->dev->ce_base + CRYPTO4XX_INT_UNMASK_STAT);
+	printk("Interrupt status = 0x%08x\n", int_status);
 
+	dev_status = readl(core_dev->dev->ce_base + CRYPTO4XX_DEVICE_INFO);
+	printk("dev status = 0x%08x\n", dev_status);
 	/* For RevB, 460EX and 460ExR Rev B */
 	if (core_dev->revb_ver == 1) {
 		writel(PPC4XX_INTERRUPT_CLR_REVB,
@@ -1625,7 +1629,7 @@ static irqreturn_t crypto4xx_ce_interrupt_handler(int irq, void *data)
  */
 struct crypto4xx_alg_common crypto4xx_alg[] = {
 		/* Crypto DES ECB, CBC,  modes */
-#if 1
+#if 0
         { .type = CRYPTO_ALG_TYPE_ABLKCIPHER, .u.cipher = {
 		.cra_name 		= "cbc(des)",
  		.cra_driver_name 	= "ppc4xx-cbc-des",
@@ -1885,6 +1889,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 			}
 		}
 	}},
+#endif
 
 	/* Hash MD5 */
         { .type = CRYPTO_ALG_TYPE_AHASH, .u.hash = {
@@ -1907,8 +1912,8 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 			.cra_module 		= THIS_MODULE,
 		}
 	}},
-#endif
-#if 1
+
+#if 0
 	/* Hash MD5-HMAC */
         { .type = CRYPTO_ALG_TYPE_AHASH, .u.hash = {
 		.init		= crypto4xx_hash_init,
@@ -1972,7 +1977,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 		}
 	}},
 
-#if 1
+#if 0
         { .type = CRYPTO_ALG_TYPE_AHASH, .u.hash = {
 		.init		= crypto4xx_hash_init,
 		.update		= crypto4xx_hash_update,
@@ -2117,7 +2122,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 		}
 	}},
 #endif
-#if 1
+#if 0
         { .type = CRYPTO_ALG_TYPE_AHASH, .u.hash = {
 		.init		= crypto4xx_hash_init,
 		.update		= crypto4xx_hash_update,
@@ -2157,7 +2162,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 			.cra_module 		= THIS_MODULE,
 		}
 	}},
-
+#endif
 	/* Crypto Kasumi and Kasumi F8 */
         { .type = CRYPTO_ALG_TYPE_ABLKCIPHER, .u.cipher = {
 		.cra_name 		= "kasumi",
@@ -2224,8 +2229,8 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 			.cra_module 		= THIS_MODULE,
 		}
 	}},
-#endif
-#if 1
+
+#if 0
 	/* Crypto ARC4 - stateless */
         { .type = CRYPTO_ALG_TYPE_ABLKCIPHER, .u.cipher = {
 		.cra_name 		= "ecb(arc4)",
@@ -2273,7 +2278,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 		}
 	}},
 #endif
-#if 1
+#if 0
 	/* IPSec combined hash and crypto Algorithms */
         { .type = CRYPTO_ALG_TYPE_AEAD, .u.cipher = {
 		.cra_name 		= "tunnel(esp(authenc(hmac(md5),cbc(aes))))",
@@ -2323,7 +2328,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 		}
 	}},
 #endif
-#if 1
+#if 0
 	/* IPSec combined hash and crypto Algorithms */
         { .type = CRYPTO_ALG_TYPE_AEAD, .u.cipher = {
 		.cra_name 		= "tunnel(esp(authenc(hmac(sha224),cbc(aes))))",
@@ -2349,7 +2354,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 		}
 	}},
 #endif
-#if 1
+#if 0
 	/* IPSec combined hash and crypto Algorithms */
         { .type = CRYPTO_ALG_TYPE_AEAD, .u.cipher = {
 		.cra_name 		= "tunnel(esp(authenc(hmac(sha256),cbc(aes))))",
@@ -3108,7 +3113,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 		}
 	}},
 #endif
-#if 1
+#if 0
 	/* IPSec combined hash and crypto Algorithms */
         { .type = CRYPTO_ALG_TYPE_AEAD, .u.cipher = {
 		.cra_name 		= "transport(esp(authenc(hmac(sha256),cbc(des3_ede))))",
@@ -3251,7 +3256,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 		}
 	}},
 #endif
-#if 1
+#if 0
         { .type = CRYPTO_ALG_TYPE_AEAD, .u.cipher = {
 		.cra_name 		= "dtls(aes-sha1)",
 		.cra_driver_name 	= "dtls-ppc4xx",
@@ -3278,7 +3283,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 		}
 	}},
 #endif
-#if 1
+#if 0
         { .type = CRYPTO_ALG_TYPE_AEAD, .u.cipher = {
 		.cra_name 		= "dtls(des-sha1)",
 		.cra_driver_name 	= "ppc4xx-dtls-des-sha1",
@@ -3305,7 +3310,7 @@ struct crypto4xx_alg_common crypto4xx_alg[] = {
 	 	}
 	}},
 #endif
-#if 1
+#if 0
         { .type = CRYPTO_ALG_TYPE_AEAD, .u.cipher = {
 		.cra_name 		= "dtls(des3-sha1)",
 		.cra_driver_name 	= "ppc4xx-dtls-des3-sha1",

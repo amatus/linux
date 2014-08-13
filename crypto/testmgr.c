@@ -1498,6 +1498,22 @@ static const struct alg_test_desc alg_test_descs_k[] = {
 					.count = 1
 				},
 				.dec = {
+					.vecs = kasumi_f8_dec_template,
+					.count = 1
+				}
+			}
+		}
+	},
+	{
+		.alg = "kasumi",
+		.test = alg_test_skcipher,
+		.suite = {
+			.cipher = {
+				.enc = {
+					.vecs = kasumi_enc_template,
+					.count = 1
+				},
+				.dec = {
 					.vecs = kasumi_dec_template,
 					.count = 1
 				}
@@ -1577,7 +1593,7 @@ static const struct alg_test_desc alg_test_descs_k[] = {
 	/* Currently disabled all the DTLS testing since,
 	 * the DTLS enc test cases fail due to Random IV generation
 	 */
-#if 0
+#if 1
 	{
 		.alg = "dtls(aes-sha1)",
 		.test = alg_test_aead,
@@ -2408,7 +2424,18 @@ static const struct alg_test_desc alg_test_descs[] = {
 				.count = MD4_TEST_VECTORS
 			}
 		}
-	}, {
+	},
+	{
+		.alg = "f9(kasumi)",
+		.test = alg_test_hash,
+		.suite = {
+			.hash = {
+				.vecs = kasumi_f9_tv_template,
+				.count = 1
+			}
+		}
+	},
+	{
 		.alg = "md5",
 		.test = alg_test_hash,
 		.suite = {
@@ -2709,6 +2736,10 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
 	int j;
 	int rc;
 
+	//printk("Testing alg = %s, driver name: %s\n", alg, driver);
+	if ((strcmp(alg, "kasumi") == 0) || (strcmp(alg, "f8(kasumi)") == 0)){
+		printk("Testing kasumi now\n");
+	}
 	if ((type & CRYPTO_ALG_TYPE_MASK) == CRYPTO_ALG_TYPE_CIPHER) {
 		char nalg[CRYPTO_MAX_ALG_NAME];
 
@@ -2727,9 +2758,12 @@ int alg_test(const char *driver, const char *alg, u32 type, u32 mask)
 		goto test_done;
 	}
 
+	
 	/* Enable these if want to test DTLS, SSL, TLS and TLSV11 and Kasumi */
+
 #if 1
 	for ( i = 0; i < 15; i++) {
+	//printk("Testing special alg = %s, driver = %s\n", alg, driver);
 		if (strcmp(alg, alg_test_descs_k[i].alg) == 0) {
 			rc = alg_test_descs_k[i].test(alg_test_descs_k + i, driver,
 						type, mask);

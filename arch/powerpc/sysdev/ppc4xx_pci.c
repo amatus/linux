@@ -1960,7 +1960,8 @@ static void __init ppc4xx_pciex_port_setup_hose(struct ppc4xx_pciex_port *port)
 		       port->index);
 	}
 #if  defined (CONFIG_APM82181) && defined(CONFIG_PCIE_MAX_PAYLOAD_SIZE_256)
-	ppc440_config_pcie_mps(hose);
+	if(port->link)
+		ppc440_config_pcie_mps(hose);
 #endif
 	return;
  fail:

@@ -104,8 +104,8 @@
 #define AHB_DMA_BRST_DFLT		64	/* 16 data items burst length */
 #endif
 
-#if defined(CONFIG_APM82181)
-   extern void signal_hdd_led(int, int);
+#if defined(CONFIG_APOLLO3G)
+extern void signal_hdd_led(int, int);
 #endif
 struct dmareg {
 	u32 low;		/* Low bits 0-31 */
@@ -1033,8 +1033,8 @@ static void dma_dwc_xfer_start(int dma_ch)
 #endif
 
   
-#if defined(CONFIG_APM82181)
-       signal_hdd_led(1 /*blink=yes*/, 2 /* _3G_LED_GREEN */);
+#if defined(CONFIG_APOLLO3G)
+	signal_hdd_led(1 /*blink=yes*/, 2 /* _3G_LED_GREEN */);
 #endif
 
 }
@@ -1742,7 +1742,9 @@ static irqreturn_t sata_dwc_isr(int irq, void *dev_instance)
 	if (intpr & SATA_DWC_INTPR_ERR) {
 		sata_dwc_error_intr(ap, hsdev, intpr);
 		handled = 1;
-                signal_hdd_led(0 /*off blink*/, 1 /*red color*/);
+#if defined(CONFIG_APOLLO3G)
+		signal_hdd_led(0 /*off blink*/, 1 /*red color*/);
+#endif
 		goto done_irqrestore;
 	}
 
@@ -1928,8 +1930,8 @@ still_busy:
 
 done_irqrestore:
 	spin_unlock_irqrestore(&host->lock, flags);
-#if defined(CONFIG_APM82181)
-       signal_hdd_led(0 /*off blink*/, -1 /* no color */);
+#if defined(CONFIG_APOLLO3G)
+	signal_hdd_led(0 /*off blink*/, -1 /* no color */);
 #endif
 	return IRQ_RETVAL(handled);
 }

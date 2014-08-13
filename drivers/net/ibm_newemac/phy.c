@@ -631,6 +631,31 @@ static struct mii_phy_def m88e1141_phy_def = {
         .ops            = &m88e1141_phy_ops,
 };
 
+static int rtl8211cl_init(struct mii_phy *phy)
+{
+        phy_write(phy, 31,0x0002);
+        phy_write(phy, 24,0xA1E0);
+        phy_write(phy, 31,0x0000);
+
+        return 0;
+}
+
+static struct mii_phy_ops rtl8211cl_phy_ops = {
+        .init           = rtl8211cl_init,
+        .setup_aneg     = genmii_setup_aneg,
+        .setup_forced   = genmii_setup_forced,
+        .poll_link      = genmii_poll_link,
+        .read_link      = genmii_read_link
+};
+
+static struct mii_phy_def rtl8211cl_phy_def = {
+        .phy_id         = 0x001CC910,   /* 0x01cc912 */
+        .phy_id_mask    = 0xfffffff0,
+        .name           = "Realtek 8211CL Ethernet",
+        .ops            = &rtl8211cl_phy_ops,
+};
+
+
 static struct mii_phy_def *mii_phy_table[] = {
 	&et1011c_phy_def,
 	&cis8201_phy_def,
@@ -641,6 +666,7 @@ static struct mii_phy_def *mii_phy_table[] = {
 	&m88e1111_phy_def,
 	&m88e1112_phy_def,
 	&m88e1141_phy_def,
+	&rtl8211cl_phy_def,
 	&genmii_phy_def,
 	NULL
 };

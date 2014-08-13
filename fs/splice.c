@@ -58,6 +58,21 @@ static void put_splice_pipe(struct pipe_inode_info *pipe);
 
 //#define SPLICE_NO_IO	1
 
+//#define SPLICE_CHECK_SIGNAL_PENDING
+#define SPLICE_READ_ALL
+#define SPLICE_FAST
+
+static inline int ignore_splice_error ( long ret )
+{
+	switch ( ret )
+	{
+		case -EAGAIN		:
+		case -ERESTARTSYS	:
+		case -EINTR			: return 1;
+		default				: return 0;
+	}
+}
+
 /*
  * Attempt to steal a page from a pipe buffer. This should perhaps go into
  * a vm helper function, it's already simplified quite a bit by the
@@ -214,10 +229,12 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 	for (;;) {
 		if (!pipe->readers) {
 			send_sig(SIGPIPE, current, 0);
-			if (!ret)
+			if (!ret) {
+				printk(KERN_ERR "%s:%s:%d\n"
+						"returning EPIPE\n", __FUNCTION__, __FILE__, __LINE__);
 				ret = -EPIPE;
+			}
 			break;
-			printk("%s:%d No readers breaking\n", __FUNCTION__, __LINE__);
 		}
 
 			
@@ -251,13 +268,16 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 		}
 
 		if (spd->flags & SPLICE_F_NONBLOCK) {
-			if (!ret)
+			if (!ret) {
+				printk(KERN_ERR "%s:%s:%d\n"
+						"returning EAGAIN\n", __FUNCTION__, __FILE__, __LINE__);
 				ret = -EAGAIN;
+			}
 
 			break;
 		}
 
-		if (signal_pending(current)) {
+		if (signal_pending(current)) { // exists in distro-kernel
 			if (!ret)
 				ret = -ERESTARTSYS;
 
@@ -882,11 +902,6 @@ ssize_t __splice_from_pipe_special(struct pipe_inode_info *pipe, struct splice_d
 	remaining = 0;
 	offset = sd->pos & ~PAGE_CACHE_MASK;
 
-	if (signal_pending(current)) {
-		release_splice_pipebufs_special(pipe);
-		return -ERESTARTSYS;
-	}
-
 #if 0
 	printk("%s:%s:%d len = %d, pipe->nrbufs = %d sd->pos=%lx\n",
 			__FILE__, __FUNCTION__, __LINE__, len, pipe->nrbufs, sd->pos);
@@ -925,8 +940,11 @@ ssize_t __splice_from_pipe_special(struct pipe_inode_info *pipe, struct splice_d
 					AOP_FLAG_UNINTERRUPTIBLE, &page, &fsdata);
 
 
-			if (unlikely(ret))
+			if (unlikely(ret)) {
+				printk(KERN_ERR "%s:%s:%d\n"
+						"returning err %d\n", __FUNCTION__, __FILE__, __LINE__, ret);
 				goto out;
+			}
 
 			char *dst = kmap(page);
 			while(not_copied) {
@@ -997,8 +1015,11 @@ ssize_t __splice_from_pipe_special(struct pipe_inode_info *pipe, struct splice_d
 			break;
 
 		if (sd->flags & SPLICE_F_NONBLOCK) {
-			if (!retval)
+			if (!retval) {
+				printk(KERN_ERR "%s:%s:%d\n"
+						"returning EAGAIN\n", __FUNCTION__, __FILE__, __LINE__);
 				retval = -EAGAIN;
+			}
 			break;
 		}
 	}
@@ -1044,20 +1065,19 @@ ssize_t __splice_from_pipe_dma(struct pipe_inode_info *pipe, struct splice_desc 
 	return sd->total_len;
 #endif
 
-	if (signal_pending(current)) {
-		retval = -ERESTARTSYS;
-		goto cleanup;
-	}
-
 	sd_p = kzalloc(sizeof(*sd_p), GFP_ATOMIC);
 	if(!sd_p) {
 		retval = -ENOMEM;
+		printk(KERN_ERR "%s:%s:%d\n"
+			"returning ENOMEM\n", __FUNCTION__, __FILE__, __LINE__);
 		goto cleanup;
 	}
 
 	pipe_addr_map = kzalloc(sizeof(*pipe_addr_map) * PIPE_BUFFERS, GFP_ATOMIC);
 	if(!pipe_addr_map) {
 		retval = -ENOMEM;
+		printk(KERN_ERR "%s:%s:%d\n"
+			"returning ENOMEM\n", __FUNCTION__, __FILE__, __LINE__);
 		goto cleanup;
 	}
 
@@ -1083,6 +1103,9 @@ ssize_t __splice_from_pipe_dma(struct pipe_inode_info *pipe, struct splice_desc 
 
 			if (unlikely(ret)) {
 				retval = ret;
+				printk(KERN_ERR "%s:%s:%d\n"
+						"returning err %d\n", 
+						__FUNCTION__, __FILE__, __LINE__, ret);
 				goto cleanup;
 			}
 
@@ -1105,6 +1128,9 @@ ssize_t __splice_from_pipe_dma(struct pipe_inode_info *pipe, struct splice_desc 
 				ret = buf->ops->confirm(pipe, buf);
 				if (unlikely(ret)) {
 					retval = ret;
+					printk(KERN_ERR "%s:%s:%d\n"
+							"returning err %d\n",
+						__FUNCTION__, __FILE__, __LINE__, ret);
 					goto cleanup;
 				}
 #endif
@@ -1173,7 +1199,8 @@ ssize_t __splice_from_pipe_dma(struct pipe_inode_info *pipe, struct splice_desc 
 			mutex_unlock(&splice_dma_lock);
 
 			if(ret) {
-				printk("%s:%s:%d - splice_dma_memcpy failed with %d\n",
+				printk("%s:%s:%d\n"
+						"splice_dma_memcpy failed with %d\n",
 						__FILE__, __FUNCTION__, __LINE__, ret);
 				kunmap(page);
 				pagecache_write_end(file, mapping, page_pos, 0, 0,
@@ -1205,8 +1232,11 @@ ssize_t __splice_from_pipe_dma(struct pipe_inode_info *pipe, struct splice_desc 
 	
 
 		if (sd->flags & SPLICE_F_NONBLOCK) {
-			if (!retval)
+			if (!retval) {
+				printk(KERN_ERR "%s:%s:%d\n"
+						"returning EAGAIN\n", __FUNCTION__, __FILE__, __LINE__);
 				retval = -EAGAIN;
+			}
 			break;
 		}
 	}
@@ -1644,11 +1674,6 @@ ssize_t splice_from_pipe_special(struct pipe_inode_info *pipe, struct file *out,
 		.u.file = out,
 	};
 
-	if (signal_pending(current)) {
-		release_splice_pipebufs_special(pipe);
-		return -ERESTARTSYS;
-	}
-
 	/*
 	 * The actor worker might be calling ->prepare_write and
 	 * ->commit_write. Most of the time, these expect i_mutex to
@@ -1687,7 +1712,7 @@ int splice_from_pipe_next(struct pipe_inode_info *pipe, struct splice_desc *sd)
 		if (sd->flags & SPLICE_F_NONBLOCK)
 			return -EAGAIN;
 
-		if (signal_pending(current))
+		if (signal_pending(current)) // exists in distro-kernel
 			return -ERESTARTSYS;
 
 		if (sd->need_wakeup) {
@@ -1820,14 +1845,15 @@ generic_file_splice_write(struct pipe_inode_info *pipe, struct file *out,
 	ssize_t ret;
 	int err = 0;
 
-	if (signal_pending(current)) {
-		release_splice_pipebufs_special(pipe);
-		return -ERESTARTSYS;
-	}
-
 	err = file_remove_suid(out);
-	if(err)
+	if(err) {
+		release_splice_pipebufs_special(pipe);
+		printk(KERN_ERR "%s:%s:%d\n"
+				"returning err %d.\n", 
+				__FUNCTION__, __FILE__, __LINE__, 
+				err);
 		return err;
+	}
 	file_update_time(out);
 
 	mutex_lock(&inode->i_mutex);
@@ -1919,11 +1945,6 @@ static long do_splice_from(struct pipe_inode_info *pipe, struct file *out,
 
 	if (unlikely(out->f_flags & O_APPEND))
 		return -EINVAL;
-
-	if (signal_pending(current)) {
-		release_splice_pipebufs_special(pipe);
-		return -ERESTARTSYS;
-	}
 
 	ret = rw_verify_area(WRITE, out, ppos, len);
 	if (unlikely(ret < 0))
@@ -2451,9 +2472,14 @@ static long do_splice_2(int fd_in, struct file *in, loff_t __user *off_in,
 	struct pipe_inode_info *pipe;
 	loff_t offset, *off;
 	long ret;
+	size_t spliced_len;
 
-	if (signal_pending(current))
-		return -ERESTARTSYS;
+	if (signal_pending(current)) {
+		printk(KERN_ERR "%s:%s:%d\n"
+					"signal pending returning EINTR.\n", 
+					__FUNCTION__, __FILE__, __LINE__);
+		return -EINTR;
+	}
 
 #ifdef DEBUG_SPLICE
 	printk("%s:%s:%d - len=%d\n", __FILE__, __FUNCTION__, __LINE__, len);
@@ -2462,8 +2488,9 @@ static long do_splice_2(int fd_in, struct file *in, loff_t __user *off_in,
 #ifndef SPLICE_DEFER_DMA
 	pipe = alloc_pipe_info(NULL);
 	if (!pipe) {
-		printk("%s %s:%d alloc_pipe_info failed\n",
-				__FUNCTION__, __FILE__, __LINE__);
+		printk( KERN_ERR "%s %s:%d\n"
+					"alloc_pipe_info failed.\n",
+					__FUNCTION__, __FILE__, __LINE__);
 		return -ENOMEM;
 	}
 
@@ -2477,28 +2504,35 @@ static long do_splice_2(int fd_in, struct file *in, loff_t __user *off_in,
 #else
 
 	pipe = get_splice_pipe();
-	if(!pipe)
+	if(!pipe) {
+		printk(KERN_ERR "%s:%s:%d\n"
+				"returning ENOMEM.\n", 
+				__FUNCTION__, __FILE__, __LINE__);
 		return -ENOMEM;
+	}
 
 	pipe->readers = 1;
 #endif
 
 	if (off_in) {
-		printk(KERN_ERR "%s:%s:%d off_in is seekable\n",
+		printk(KERN_ERR "%s:%s:%d\n"
+				"off_in is seekable.\n",
 				__FUNCTION__, __FILE__, __LINE__);
 		ret = -ESPIPE;
 		goto out;
 	}
 	if (off_out) {
 		if (out->f_op->llseek == no_llseek) {
-			printk(KERN_ERR "%s:%s:%d out is non-seekable\n",
+			printk(KERN_ERR "%s:%s:%d\n"
+					"out is non-seekable.\n",
 					__FUNCTION__, __FILE__, __LINE__);
 			ret = -EINVAL;
 			goto out;
 		}
 		if (copy_from_user(&offset, off_out, sizeof(loff_t))) {
-			printk(KERN_ERR "%s:%s:%d copy_from_user failed\n",
-				__FUNCTION__, __FILE__, __LINE__);
+			printk(KERN_ERR "%s:%s:%d\n"
+					"copy_from_user failed.\n",
+					__FUNCTION__, __FILE__, __LINE__);
 			ret = -EFAULT;
 			goto out;
 		}
@@ -2511,6 +2545,8 @@ static long do_splice_2(int fd_in, struct file *in, loff_t __user *off_in,
 	printk("%s:%s:%d - calling in->f_op.splice_read len=%d\n",
 			__FILE__, __FUNCTION__, __LINE__, len);
 #endif
+
+#ifndef SPLICE_READ_ALL
 	ret = in->f_op->splice_read(in, off_in, pipe, len, flags);
 
 #ifdef DEBUG_SPLICE
@@ -2518,7 +2554,8 @@ static long do_splice_2(int fd_in, struct file *in, loff_t __user *off_in,
 #endif
 
 	if(!ret) {
-		printk(KERN_ERR "%s:%s:%d sock_splice_read read nothing\n",
+		printk(KERN_ERR "%s:%s:%d\n"
+				"sock_splice_read read nothing.\n",
 				__FILE__, __FUNCTION__, __LINE__);
 		ret = -EAGAIN;
 		goto out;
@@ -2526,22 +2563,119 @@ static long do_splice_2(int fd_in, struct file *in, loff_t __user *off_in,
 
 
 #ifdef DEBUG_SPLICE
-
 	printk("%s:%s:%d - Number of pipe bufs = %d\n",
 				__FILE__, __FUNCTION__, __LINE__, pipe->nrbufs);  
 #endif
 
-	len = ret;
-	ret = do_splice_from(pipe, out, off, len, flags);
+	if ( ret != len )
+	{
+		printk( KERN_ERR "%s:%s:%d\n"
+					"splice read %ld instead of %d, offset is %d.\n",
+					__FILE__, __FUNCTION__, __LINE__, 
+					ret, len, (off == NULL) ? 0 : *off );
+	}
+
+	/** save the returned data length */
+	spliced_len = ret;
+
+#else // SPLICE_READ_ALL
+	{
+		size_t data_len;
+		int	   attempt;
+
+		/** init */
+		data_len	= len	;
+		spliced_len = 0		;
+		attempt		= 0		;
+
+		/** read data until expected length is received */
+		while ( data_len )
+		{
+			attempt++;
+
+			/** read data (calls tcp_splice_read() in tcp.c) */
+			ret = in->f_op->splice_read( in, off_in, pipe, data_len, flags );
+
+			/** handle error status */
+			if( ret <= 0 ) 
+			{
+				printk( KERN_ERR "%s:%s:%d\n"
+							"sock_splice_read read error %ld.\n",
+						    __FILE__, __FUNCTION__, __LINE__, 
+							ret );
+
+				/** fail on specific errors */
+				if ( ret == 0 || ! ignore_splice_error ( ret ) )
+				{
+					printk( KERN_ERR "%s:%s:%d\n"
+								"returning read error %ld "
+								"after reading %d out of %d bytes.\n",
+								__FILE__, __FUNCTION__, __LINE__, 
+								ret, spliced_len, len );
+
+					release_splice_pipebufs_special(pipe);
+					goto out;
+				}	
+			}
+			
+			/** compute the balance data to be read in next iteration */
+			if ( ret > 0 )
+			{
+				data_len	-= ret;
+				spliced_len += ret;
+			}
+
+			/** warn if attempting more than 1 splice read */
+			if ( data_len != 0 )
+			{
+				printk( KERN_ERR "%s:%s:%d\n"
+							"Warning: Could not read all the data on "
+							"attempt# %d. Read: %ld, Total Read: %d"
+							" ... trying again.\n",
+							__FILE__, __FUNCTION__, __LINE__, 
+							attempt, ret, spliced_len );
+			}
+		}
+
+		/** warn if more data than expected is read */
+		// NB: Should not happen
+		if ( spliced_len != len )
+		{
+			printk( KERN_ERR "%s:%s:%d\n"
+						"Should Not Happen. "
+						"splice read %ld instead of %d, offset is %lld.\n",
+						__FILE__, __FUNCTION__, __LINE__, 
+						ret, len, (off == NULL) ? 0 : *off );
+		}
+
+	}
+#endif // SPLICE_READ_ALL
+
+	ret = do_splice_from(pipe, out, off, spliced_len, flags);
 
 #ifdef DEBUG_SPLICE
 	printk("%s:%s:%d do_splice_from returns %d\n", __FILE__, __FUNCTION__, __LINE__,
 			ret);
 #endif
 
+	/** handle errors */
+	if ( ret < 0 )
+	{
+		release_splice_pipebufs_special(pipe);
+		goto out;
+	}
+
+	if ( ret != spliced_len )
+	{
+		printk( KERN_ERR "%s:%s:%d\n"
+					"splice wrote %ld instead of %d\n", 
+					__FILE__, __FUNCTION__, __LINE__, 
+					ret, spliced_len );
+	}
+
 	if (off_out && copy_to_user(off_out, off, sizeof(loff_t))) {
 		printk(KERN_ERR "%s:%s:%d copy_to_user failed\n",
-			__FILE__, __FUNCTION__, __LINE__);
+					__FILE__, __FUNCTION__, __LINE__);
 		ret = -EFAULT;
 	}
 
@@ -2551,6 +2685,15 @@ static long do_splice_2(int fd_in, struct file *in, loff_t __user *off_in,
 
 out:
    	kfree(pipe);	
+
+	if ( ret < 0 )
+	{
+		printk( KERN_ERR "%s:%s:%d\n"
+					"returning ret=%ld\n", 
+					__FILE__, __FUNCTION__, __LINE__, 
+					ret );
+	}
+
 	return ret;
 }
 /*
@@ -2888,8 +3031,12 @@ SYSCALL_DEFINE6(splice, int, fd_in, loff_t __user *, off_in,
 	if (unlikely(!len))
 		return 0;
 
-	if (signal_pending(current)) 
-		return -ERESTARTSYS;
+	if (signal_pending(current)) {
+		printk(KERN_ERR "%s:%s:%d\n"
+					"signal pending returning EINTR.\n", 
+					__FUNCTION__, __FILE__, __LINE__);
+		return -EINTR;
+	}
 
 	in = fget_light(fd_in, &fput_in);
 	if (in) {
@@ -2897,7 +3044,7 @@ SYSCALL_DEFINE6(splice, int, fd_in, loff_t __user *, off_in,
 			out = fget_light(fd_out, &fput_out);
 			if (out) {
 				if (out->f_mode & FMODE_WRITE)
-#if 0
+#ifndef SPLICE_FAST
 					error = do_splice(in, off_in,
 							  out, off_out,
 							  len, flags);
@@ -2937,7 +3084,7 @@ static int ipipe_prep(struct pipe_inode_info *pipe, unsigned int flags)
 	pipe_lock(pipe);
 
 	while (!pipe->nrbufs) {
-		if (signal_pending(current)) {
+		if (signal_pending(current)) { // exists in distro-kernel
 			ret = -ERESTARTSYS;
 			break;
 		}
@@ -2984,7 +3131,7 @@ static int opipe_prep(struct pipe_inode_info *pipe, unsigned int flags)
 			ret = -EAGAIN;
 			break;
 		}
-		if (signal_pending(current)) {
+		if (signal_pending(current)) { // exists in distro-kernel
 			ret = -ERESTARTSYS;
 			break;
 		}

@@ -102,13 +102,11 @@
 		reg = <4 0x00040000 0x8000>; /* 32K */
 	};
 
-	/* TODO: Check this for Maui */
 	SDR0: sdr {
 		compatible = "ibm,sdr-460ex";
 		dcr-reg = <0x00e 0x002>;
 	};
 
-	/* TODO: Change for Maui */
 	CPR0: cpr {
 		compatible = "ibm,cpr-460ex";
 		dcr-reg = <0x00c 0x002>;
@@ -167,7 +165,7 @@
 			compatible = "ppc4xx-pka", "amcc, ppc4xx-pka";
 			reg = <4 0x00114000 0x4000>;
 			interrupt-parent = <&UIC0>;
-			interrupts = <0x14 0x2>;
+			interrupts = <0x14 0x1>;
 		};
 
 		TRNG: trng@110000 {
@@ -175,7 +173,7 @@
 			compatible = "ppc4xx-trng", "amcc, ppc4xx-trng";
 			reg = <4 0x00110000 0x100>;
 			interrupt-parent = <&UIC1>;
-			interrupts = <0x3 0x2>;
+			interrupts = <0x3 0x4>;
 		};
 
 		RTC: rtc {
@@ -205,7 +203,6 @@
                                         /*RX1 COAL  0xd 0x2*/>;
 		};
 
-		/* TODO: Check for Maui */
 		USBOTG0: usbotg@bff80000 {
 			compatible = "amcc,usb-otg-405ex";
 			reg = <4 0xbff80000 0x10000>;
@@ -311,7 +308,6 @@
 				interrupts = <0x6 0x4>;
 				interrupt-parent = <&UIC1>;
 
-				/* TODO: Change for Beech platform . 4M Nor Flash */
 				nor_flash@0,0 {
 					compatible = "amd,s29gl512n", "cfi-flash";
 					bank-width = <1>;
@@ -423,7 +419,6 @@
 				reg = <0xef601350 0x00000030>;
 			};
 
-			/* TODO: Change for Maui */
 			EMAC0: ethernet@ef600c00 {
 				device_type = "network";
 				compatible = "ibm,emac-405ex", "ibm,emac4sync";

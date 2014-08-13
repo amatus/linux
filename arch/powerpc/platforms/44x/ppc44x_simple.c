@@ -54,6 +54,7 @@ static char *board[] __initdata = {
 	"amcc,bamboo",
 	"amcc,beech",
 	"amcc,apollo3g",
+	"amcc,bluestone",
 	"amcc,canyonlands",
 	"amcc,glacier",
 	"ibm,ebony",

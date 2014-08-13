@@ -115,6 +115,17 @@ config APOLLO3G
 	help
           This option enables support for the WDC Apollo3G NAS.
 
+config BLUESTONE
+	bool "Bluestone"
+	depends on 44x
+	default n
+	select PPC44x_SIMPLE
+	select APM82181
+	select PPC4xx_PCI_EXPRESS
+	select IBM_NEW_EMAC_RGMII
+	help
+          This option enables support for the AMCC APM82181 evaluation board.
+
 config CANYONLANDS
 	bool "Canyonlands"
 	depends on 44x

@@ -96,6 +96,16 @@
 
 #define printk_rl(args...) ((void) (printk_ratelimit() && printk(args)))
 
+#ifdef CONFIG_MD_RAID_SKIP_BIO_COPY
+/* Define SKIP_BIO_COPY_ERR to enable work around for the issue 
+ * SKIP_BIO_COPY malfunction when RAID degrades 
+ */
+#define SKIP_BIO_COPY_ERR
+#if defined(SKIP_BIO_COPY_ERR)
+static int degraded = 0;
+#endif
+#endif
+
 /*
  * We maintain a biased count of active stripes in the bottom 16 bits of
  * bi_phys_segments, and a count of processed stripes in the upper 16 bits
@@ -956,6 +966,12 @@ ops_run_biodrain(struct stripe_head *sh, struct dma_async_tx_descriptor *tx)
 		(unsigned long long)sh->sector);
 
 #ifdef CONFIG_MD_RAID_SKIP_BIO_COPY
+#ifdef SKIP_BIO_COPY_ERR
+	if(degraded){
+		fswrite = 0;
+		goto not_use_skip_bio;
+	}
+#endif
         /* initially assume that the operation is a full-stripe write*/
         for (i = disks; i-- ;) {
                 struct r5dev *dev = &sh->dev[i];
@@ -1017,6 +1033,9 @@ do_copy:
                 /* won't add new txs right now, so run ops currently pending */
                 async_tx_issue_pending_all();
         }
+#endif
+#ifdef SKIP_BIO_COPY_ERR
+not_use_skip_bio:
 #endif
 
 	for (i = disks; i--; ) {
@@ -1127,7 +1146,7 @@ ops_run_reconstruct5(struct stripe_head *sh, struct raid5_percpu *percpu,
 	 * set ASYNC_TX_XOR_DROP_DST and ASYNC_TX_XOR_ZERO_DST
 	 * for the synchronous xor case
 	 */
-	flags = ASYNC_TX_ACK |
+	flags = ASYNC_TX_FENCE | ASYNC_TX_ACK |
 		(prexor ? ASYNC_TX_XOR_DROP_DST : ASYNC_TX_XOR_ZERO_DST);
 
 	atomic_inc(&sh->count);
@@ -1718,6 +1737,7 @@ static void error(mddev_t *mddev, mdk_rdev_t *rdev)
 			 */
 			set_bit(MD_RECOVERY_INTR, &mddev->recovery);
 		}
+		degraded = 1;
 		set_bit(Faulty, &rdev->flags);
 		printk(KERN_ALERT
 		       "raid5: Disk failure on %s, disabling device.\n"
@@ -3977,6 +3997,12 @@ static int make_request(struct request_queue *q, struct bio * bi)
 	const int rw = bio_data_dir(bi);
 	int cpu, remaining;
 
+#if defined(SKIP_BIO_COPY_ERR)
+	if(mddev->degraded)
+		degraded = 1;
+	else
+		degraded = 0;
+#endif
 	if (unlikely(bio_rw_flagged(bi, BIO_RW_BARRIER))) {
 		/* Drain all pending writes.  We only really need
 		 * to ensure they have been submitted, but this is
@@ -5235,6 +5261,9 @@ static int stop(mddev_t *mddev)
 	blk_sync_queue(mddev->queue); /* the unplug fn references 'conf'*/
 	free_conf(conf);
 	mddev->private = &raid5_attrs_group;
+#if defined(SKIP_BIO_COPY_ERR)
+	degraded = 0;
+#endif
 	return 0;
 }
 

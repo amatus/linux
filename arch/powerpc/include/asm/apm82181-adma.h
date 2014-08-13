@@ -203,6 +203,8 @@ typedef struct apm82181_adma_plb_desc_slot {
 	unsigned long flags;
 	unsigned long reverse_flags[8];
 #define APM82181_DESC_INT       0       /* generate interrupt on complete */
+#define APM82181_DESC_FENCE     1       /* Other tx will use its result */
+					/* This tx needs to be polled to complete */
 
 }apm82181_desc_t;
 

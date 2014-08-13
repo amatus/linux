@@ -453,7 +453,7 @@ static int raid0_make_request(struct request_queue *q, struct bio *bio)
 	int cpu;
 
 	if (unlikely(bio_rw_flagged(bio, BIO_RW_BARRIER))) {
-		md_barrier_request(mddev, bio);
+		bio_endio(bio, -EOPNOTSUPP);
 		return 0;
 	}
 

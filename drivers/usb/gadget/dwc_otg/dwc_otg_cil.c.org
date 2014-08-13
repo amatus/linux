@@ -1838,7 +1838,7 @@ void ppc4xx_start_plb_dma(dwc_otg_core_if_t *_core_if, void *src, void *dst, uns
 
 	mtdcr(DCRN_DMACR0 + (dma_ch * 8), control);
 
-#ifdef CONFIG_OTG_PLB_DMA_DBG
+#ifdef OTG_PLB_DMA_DBG
 	ppc4xx_dump_dma(dma_ch);
 #endif
 	ppc4xx_enable_dma(dma_ch);
@@ -1917,7 +1917,7 @@ void dwc_otg_hc_write_packet(dwc_otg_core_if_t * _core_if, dwc_hc_t * _hc)
 	while (mfdcr(DCRN_DMACR0 + (PLB_DMA_CH*8)) & DMA_CE_ENABLE) {
 	}
 	dma_sts = (uint32_t)ppc4xx_get_dma_status();
-#ifdef CONFIG_OTG_PLB_DMA_DBG
+#ifdef OTG_PLB_DMA_DBG
 	if (!(dma_sts & DMA_CS0)) {
 		printk("Status (Terminal Count not occured) 0x%08x\n", mfdcr(DCRN_DMASR));
 	}
@@ -1926,7 +1926,7 @@ void dwc_otg_hc_write_packet(dwc_otg_core_if_t * _core_if, dwc_hc_t * _hc)
 	    printk("Status (Channel Error) 0x%08x\n", mfdcr(DCRN_DMASR));
 	}
 	ppc4xx_clr_dma_status(PLB_DMA_CH);
-#ifdef CONFIG_OTG_PLB_DMA_DBG
+#ifdef OTG_PLB_DMA_DBG
 	printk("%32s DMA Status =0x%08x\n", __FUNCTION__, mfdcr(DCRN_DMASR)); /* vj_dbg */
 #endif
 
@@ -2687,7 +2687,7 @@ void dwc_otg_ep_write_packet(dwc_otg_core_if_t * _core_if, dwc_ep_t * _ep,
 		while (mfdcr(DCRN_DMACR0 + (DMA_CH0*8)) & DMA_CE_ENABLE) {
 		}
 		dma_sts = (uint32_t)ppc4xx_get_dma_status();
-#ifdef CONFIG_OTG_PLB_DMA_DBG
+#ifdef OTG_PLB_DMA_DBG
 		if (!(dma_sts & DMA_CS0)) {
 			printk("DMA Status (Terminal Count not occured) 0x%08x\n", mfdcr(DCRN_DMASR));
 	    }
@@ -2696,7 +2696,7 @@ void dwc_otg_ep_write_packet(dwc_otg_core_if_t * _core_if, dwc_ep_t * _ep,
 	    	printk("DMA Status (Channel 0 Error) 0x%08x\n", mfdcr(DCRN_DMASR));
         }
         ppc4xx_clr_dma_status(PLB_DMA_CH);
-#ifdef CONFIG_OTG_PLB_DMA_DBG
+#ifdef OTG_PLB_DMA_DBG
         printk("%32s DMA Status =0x%08x\n", __FUNCTION__, mfdcr(DCRN_DMASR)); /* vj_dbg */
 #endif
 #endif	/* CONFIG_OTG_PLB_DMA_TASKLET */
@@ -2841,7 +2841,7 @@ void dwc_otg_read_packet(dwc_otg_core_if_t * _core_if,
 	while (mfdcr(DCRN_DMACR0 + (DMA_CH0*8)) & DMA_CE_ENABLE) {
 	}
 	dma_sts = (uint32_t)ppc4xx_get_dma_status();
-#ifdef CONFIG_OTG_PLB_DMA_DBG
+#ifdef OTG_PLB_DMA_DBG
 	if (!(dma_sts & DMA_CS0)) {
 		printk("DMA Status (Terminal Count not occured) 0x%08x\n", mfdcr(DCRN_DMASR));
     }
@@ -2850,7 +2850,7 @@ void dwc_otg_read_packet(dwc_otg_core_if_t * _core_if,
 		printk("DMA Status (Channel 0 Error) 0x%08x\n", mfdcr(DCRN_DMASR));
 	}
 	ppc4xx_clr_dma_status(PLB_DMA_CH);
-#ifdef CONFIG_OTG_PLB_DMA_DBG
+#ifdef OTG_PLB_DMA_DBG
 	printk("%32s DMA Status =0x%08x\n", __FUNCTION__, mfdcr(DCRN_DMASR));
 	printk(" Rxed buffer \n");
 	for( i=0; i< _bytes; i++) {

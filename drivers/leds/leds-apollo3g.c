@@ -157,24 +157,25 @@ static int a3g_led_blink(struct led_classdev *led_cdev,  int value) {
    /* 
     * if forced blink, don't set blink_flag
     */
-    if( blink_flag == 2 ) {
-       return 0;
-    }
+   if( blink_flag == 2 ) {
+	  return 0;
+   }
   
    /*spin_lock_irqsave(&led_lock, flags);*/
    /* user wants to blink led */
    if( value == 1 ) {
-      wake_up(&ts_wait);
       blink_flag = 1;
-
+      wake_up(&ts_wait);
    } 
    else if( value == 0) {
       blink_flag = 0;
    }
    else if( value == 2 ) {
-      wake_up(&ts_wait);
       blink_flag = 2;
+      wake_up(&ts_wait);
    }
+   // printk(KERN_DEBUG "%s: Got blink signal - input blink value %d, blink_flag %d\n", __func__, value, blink_flag);
+
   /* spin_unlock_irqrestore(&led_lock, flags);*/
 
    return 0;
@@ -193,12 +194,12 @@ void signal_hdd_led(int flag, int color) {
    if( blink_flag == 2 ) {
       return;
    }
-  
-   if( flag &&   /* blink or not */
+
+   if( flag &&   /* blink == yes */
        (led_state.cur_color == _3G_LED_GREEN)
 #if 0
-       (led_state.cur_color != _3G_LED_WHITE) &&  /* don't touch fw update led */
-       (led_state.cur_color != _3G_LED_RED) &&           /* don't touch system error led */
+       (led_state.cur_color != _3G_LED_WHITE)  && /* don't touch fw update led */
+       (led_state.cur_color != _3G_LED_RED)    && /* don't touch system error led */
        !((led_state.cur_color == _3G_LED_BLUE) && (led_state.cur_action == _BLINK_YES)) && /* leave identity alone */
        (color != _3G_LED_RED)
 #endif
@@ -209,23 +210,27 @@ void signal_hdd_led(int flag, int color) {
       blink_flag = 1;
       wake_up(&ts_wait);
    }
-   else {
-      blink_flag = 0;
+   else if( ! flag &&   /* blink == no */
+	        ( led_state.cur_color == _3G_LED_GREEN ) ) 
+   {
+        blink_flag = 0;
    }
+
+   //printk(KERN_DEBUG "%s: Got HDD signal - color %d, blink %d, blink_flag %d\n", __func__, color, flag, blink_flag);
 }
 
 static struct led_classdev a3g_led_dev = { 
         .name           = "a3g_led",
-        .color_set = a3g_led_set,
-        .color_get = a3g_led_get,
-        .blink_set_3g = a3g_led_blink,
+        .color_set      = a3g_led_set,
+        .color_get      = a3g_led_get,
+        .blink_set_3g   = a3g_led_blink,
 };
 
 /****************************************************/
 static int __init a3g_led_probe(struct platform_device *pdev ) {
 
-	/* Not used */
-	return 0;
+    /* Not used */
+    return 0;
 }
 
 /****************************************************/
@@ -239,12 +244,12 @@ static int __devexit a3g_led_remove(struct platform_device *pdev){
     return 0;
 }
 static struct platform_driver a3g_led_driver = {
-	.probe		= a3g_led_probe, 
-	.remove		= __devexit_p(a3g_led_remove),
-	.driver		= {
-        	.name		= "a3g-leds",
+    .probe      = a3g_led_probe, 
+    .remove     = __devexit_p(a3g_led_remove),
+    .driver     = {
+                 .name = "a3g-leds",
                 .owner = THIS_MODULE,
-	},
+    },
 };
 
 #if 0
@@ -287,7 +292,7 @@ static int a3g_led_blink_thread( void * data ) {
 
       led_state.cur_action = _BLINK_NO;
       /* always set current color before blinking */
-      a3g_led_set( NULL, led_state.cur_color);         
+      a3g_led_set( NULL, led_state.cur_color);
       wait_event_freezable_timeout(ts_wait, blink_flag || kthread_should_stop(), MAX_SCHEDULE_TIMEOUT); 
       if( led_port ) {
          readval = readb(led_port);

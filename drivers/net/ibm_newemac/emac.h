@@ -320,5 +320,6 @@ struct emac_regs {
 #define EMAC_TX_CTRL_TAH_SSR3           0x0008
 #define EMAC_TX_CTRL_TAH_SSR4           0x000a
 #define EMAC_TX_CTRL_TAH_SSR5           0x000c
+#define EMAC_TX_CTRL_TAH_SSR(idx)	(((idx) + 1) << 1)
 #define EMAC_TX_CTRL_TAH_CSUM           0x000e
 #endif /* __IBM_NEWEMAC_H */

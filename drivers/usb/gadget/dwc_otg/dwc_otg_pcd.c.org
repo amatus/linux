@@ -1331,9 +1331,6 @@ void dwc_otg_pcd_remove(struct device *_dev)
 int usb_gadget_register_driver(struct usb_gadget_driver *_driver)
 {
 	int retval;
-	dctl_data_t dctl;
-        uint32_t *addr = NULL;
-
 	DWC_DEBUGPL(DBG_PCD, "registering gadget driver '%s'\n",
 		      _driver->driver.name);
 	if (!_driver || _driver->speed == USB_SPEED_UNKNOWN || !_driver->bind
@@ -1379,16 +1376,6 @@ int usb_gadget_register_driver(struct usb_gadget_driver *_driver)
 	}
 	DWC_DEBUGPL(DBG_ANY, "registered gadget driver '%s'\n",
 		     _driver->driver.name);
-
-	/* do soft-disconnect */
-        addr = (uint32_t *)&(GET_CORE_IF(s_pcd)->dev_if->dev_global_regs->dctl);
-        dctl.d32 = dwc_read_reg32(addr);
-        dctl.b.sftdiscon = 1;
-        dwc_write_reg32(addr, dctl.d32);
-        msleep(2000);
-        dctl.b.sftdiscon = 0;
-        dwc_write_reg32(addr, dctl.d32);
-
 	return 0;
 }
 EXPORT_SYMBOL(usb_gadget_register_driver);

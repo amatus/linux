@@ -1110,7 +1110,7 @@ static int dma_dwc_xfer_setup(struct ata_queued_cmd *qc,
 #if defined(CONFIG_APM82181)
 	if (dma_ch == 0) {
 		/* Buffer mode enabled, FIFO_MODE=0 */
-		out_le32(&(sata_dma_regs->chan_regs[dma_ch].cfg.high), 0x000000d);
+		out_le32(&(sata_dma_regs->chan_regs[dma_ch].cfg.high), 0x0000009);
 		/* Channel 0 bit[7:5] */
 		out_le32(&(sata_dma_regs->chan_regs[dma_ch].cfg.low), 0x00000020);
 	} else if (dma_ch == 1) {

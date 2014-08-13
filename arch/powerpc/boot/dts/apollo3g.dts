@@ -179,6 +179,30 @@
                                         /*RX1 COAL  0xd 0x2*/>;
 		};
 
+                USBOTG0: usbotg@bff80000 {
+                        compatible = "amcc,usb-otg-405ex";
+                        reg = <4 0xbff80000 0x10000>;
+                        interrupt-parent = <&USBOTG0>;
+                        interrupts = <0 1 2>; 
+                        #interrupt-cells = <1>;
+                        #address-cells = <0>;
+                        #size-cells = <0>;
+                        interrupt-map = </* USB-OTG */ 0 &UIC2 0x1c 4
+                                         /* HIGH-POWER */ 1 &UIC1 0x1a 8
+                                         /* DMA */ 2 &UIC0 0xc 4>; 
+                };  
+
+
+		/* SATA DWC devices */
+		SATA0: sata@bffd1000 {
+				compatible = "amcc,sata-460ex";
+				reg = <4 0xbffd1000 0x800       /* SATA0 */
+					   4 0xbffd0800 0x400>;     /* AHBDMA */
+				dma-channel=<0>;
+				interrupt-parent = <&UIC0>;
+				interrupts = <26 4      /* SATA0 */
+							  25 4>;    /* AHBDMA */
+		};
 		SATA1: sata@bffd1800 {
 			compatible = "amcc,sata-460ex";
 			reg = <4 0xbffd1800 0x800	/* SATA1 */

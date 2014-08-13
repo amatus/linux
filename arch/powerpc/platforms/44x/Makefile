@@ -6,5 +6,6 @@ obj-$(CONFIG_WARP)	+= warp.o
 obj-$(CONFIG_XILINX_VIRTEX_5_FXT) += virtex.o
 obj-$(CONFIG_XILINX_ML510) += virtex_ml510.o
 obj-$(CONFIG_BEECH)	+= beech-usb.o
+obj-$(CONFIG_APOLLO3G)	+= apollo3g-usb.o
 obj-$(CONFIG_APOLLO3G)	+= apollo3g-gpio.o
 obj-$(CONFIG_BLUESTONE)	+= bluestone-usb.o

@@ -33,6 +33,7 @@
 #include <linux/pci.h>
 #include <linux/etherdevice.h>
 #include <linux/skbuff.h>
+#include <linux/tcp.h>
 #include <linux/crc32.h>
 #include <linux/ethtool.h>
 #include <linux/mii.h>
@@ -41,6 +42,7 @@
 #include <linux/of.h>
 #include <linux/sysctl.h>
 
+#include <net/tcp.h>
 #include <asm/processor.h>
 #include <asm/io.h>
 #include <asm/dma.h>
@@ -1261,6 +1263,27 @@ static int emac_change_mtu(struct net_device *ndev, int new_mtu)
 	}
 
 	if (!ret) {
+		if (emac_has_feature(dev, EMAC_FTR_HAS_TAH)) {
+		  	struct tah_instance *tdev;
+			int i, adj_val = 0;
+			u32 ss_defs[] = TAH_SS_DEFAULT;
+
+			tdev = dev_get_drvdata(&dev->tah_dev->dev);
+			if (new_mtu > ss_defs[0]) {
+				/* add the current MTU  */
+				tah_set_ssr(dev->tah_dev, 0, new_mtu);
+				/* update the adjustment var */
+				adj_val = 1;
+			}
+			/* don't allow values to exceed new MTU */
+			for (i = adj_val; i < TAH_NO_SSR;i++) {
+			      if (ss_defs[i-adj_val] > new_mtu)
+				    tah_set_ssr(dev->tah_dev, i, 
+						new_mtu);					
+			      else tah_set_ssr(dev->tah_dev, i, 
+						ss_defs[i-adj_val]);
+			}
+		}
 		ndev->mtu = new_mtu;
 		dev->rx_skb_size = emac_rx_skb_size(new_mtu);
 		dev->rx_sync_size = emac_rx_sync_size(new_mtu);
@@ -1597,12 +1620,64 @@ static int emac_close(struct net_device *ndev)
 static inline u16 emac_tx_csum(struct emac_instance *dev,
 			       struct sk_buff *skb)
 {
+	u32 seg_size = 0;
+	int i = 0;
+	int ssr_idx = -1;
+	u32 curr_seg;
+	__be16 protocol;
+	int is_tcp = 0;
+	struct tah_instance *tah_dev;
+
 	if (emac_has_feature(dev, EMAC_FTR_HAS_TAH) &&
 		(skb->ip_summed == CHECKSUM_PARTIAL)) {
 		++dev->stats.tx_packets_csum;
-		if (skb_is_gso(skb))
-			return EMAC_TX_CTRL_TAH_SSR0;
-		else
+		
+		/* Only support TSO for TCP */
+		protocol = skb->protocol;
+		switch (protocol) {
+		case cpu_to_be16(ETH_P_IP):
+			is_tcp = (ip_hdr(skb)->protocol == IPPROTO_TCP);
+                	break;
+		case cpu_to_be16(ETH_P_IPV6):
+	                is_tcp = (ipv6_hdr(skb)->nexthdr == IPPROTO_TCP);
+                	break;
+	        default:
+			is_tcp = 0;
+                	break;
+        	}
+	
+		if (skb_is_gso(skb) && is_tcp) {
+			/* Get the MTU */
+                        seg_size = skb_is_gso(skb) + tcp_hdrlen(skb) 
+					+ skb_network_header_len(skb);  
+			/* Get the best suitable MTU */
+			tah_dev = dev_get_drvdata(&dev->tah_dev->dev);
+			ssr_idx = -1;
+			for (i = 0; i < TAH_NO_SSR; i++) {
+				curr_seg = tah_dev->ss_array[tah_dev->ss_order[i]];
+				if ( (curr_seg > dev->ndev->mtu) || 
+					(curr_seg > seg_size) )
+					continue;
+				if (curr_seg <= seg_size) {
+					ssr_idx = tah_dev->ss_order[i];
+					break;
+				}
+			}
+
+			if (ssr_idx == -1) {
+				printk(KERN_WARNING "No suitable TAH_SSRx "
+					"for segmentation size %d\n", seg_size);
+				/* Avoid using TSO feature in this case */
+				return EMAC_TX_CTRL_TAH_CSUM;
+			}
+
+#if 0			
+			printk("Select ssr index %d segment size %d SSR value 0x%04x\n", 
+				ssr_idx, tah_dev->ss_array[ssr_idx],
+				EMAC_TX_CTRL_TAH_SSR(ssr_idx));		
+#endif
+			return EMAC_TX_CTRL_TAH_SSR(ssr_idx);
+		} else
 			return EMAC_TX_CTRL_TAH_CSUM;
 	}
 	return 0;
@@ -2812,6 +2887,164 @@ static ssize_t store_emi_fix_enable(struct device *dev,
 
 #endif
 
+#if defined(CONFIG_IBM_NEW_EMAC_TAH)
+static ssize_t show_tah_ssr0(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		return sprintf(buf, "%d\n", 
+			TAH_SSR_2_SS(tah_get_ssr(dev_ins->tah_dev, 0)) << 1);
+
+	return 0;
+}
+
+static ssize_t store_tah_ssr0(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	long tmp = simple_strtol(buf, NULL, 10);
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		tah_set_ssr(dev_ins->tah_dev, 0, tmp);	
+
+	return count;
+}
+
+static ssize_t show_tah_ssr1(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		return sprintf(buf, "%d\n", 
+			TAH_SSR_2_SS(tah_get_ssr(dev_ins->tah_dev, 1)) << 1);
+
+	return 0;
+}
+
+static ssize_t store_tah_ssr1(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	long tmp = simple_strtol(buf, NULL, 10);
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		tah_set_ssr(dev_ins->tah_dev, 1, tmp);	
+
+	return count;
+}
+
+static ssize_t show_tah_ssr2(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		return sprintf(buf, "%d\n", 
+			TAH_SSR_2_SS(tah_get_ssr(dev_ins->tah_dev, 2)) << 1);
+
+	return 0;
+}
+
+static ssize_t store_tah_ssr2(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	long tmp = simple_strtol(buf, NULL, 10);
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		tah_set_ssr(dev_ins->tah_dev, 2, tmp);	
+
+	return count;
+}
+
+static ssize_t show_tah_ssr3(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		return sprintf(buf, "%d\n", 
+			TAH_SSR_2_SS(tah_get_ssr(dev_ins->tah_dev, 3)) << 1);
+
+	return 0;
+}
+
+static ssize_t store_tah_ssr3(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	long tmp = simple_strtol(buf, NULL, 10);
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		tah_set_ssr(dev_ins->tah_dev, 3, tmp);	
+
+	return count;
+}
+
+static ssize_t show_tah_ssr4(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		return sprintf(buf, "%d\n", 
+			TAH_SSR_2_SS(tah_get_ssr(dev_ins->tah_dev, 4)) << 1);
+
+	return 0;
+}
+
+static ssize_t store_tah_ssr4(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	long tmp = simple_strtol(buf, NULL, 10);
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		tah_set_ssr(dev_ins->tah_dev, 4, tmp);	
+
+	return count;
+}
+
+static ssize_t show_tah_ssr5(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		return sprintf(buf, "%d\n", 
+			TAH_SSR_2_SS(tah_get_ssr(dev_ins->tah_dev, 5)) << 1);
+
+	return 0;
+}
+
+static ssize_t store_tah_ssr5(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct emac_instance *dev_ins = netdev_priv(ndev);
+
+	long tmp = simple_strtol(buf, NULL, 10);
+	if (emac_has_feature(dev_ins, EMAC_FTR_HAS_TAH))
+		tah_set_ssr(dev_ins->tah_dev, 5, tmp);	
+
+	return count;
+}
+#endif
+
 #if defined(CONFIG_IBM_NEW_EMAC_INTR_COALESCE)
 static DEVICE_ATTR(coalesce_param_tx_count,
                 S_IRUGO | S_IWUSR, show_tx_count, store_tx_count);
@@ -2821,6 +3054,21 @@ static DEVICE_ATTR(coalesce_param_tx_time,
                 S_IRUGO | S_IWUSR, show_tx_time, store_tx_time);
 static DEVICE_ATTR(coalesce_param_rx_time,
                 S_IRUGO | S_IWUSR, show_rx_time, store_rx_time);
+#endif
+
+#if defined(CONFIG_IBM_NEW_EMAC_TAH)
+static DEVICE_ATTR(tah_ssr0,
+	S_IRUGO | S_IWUSR, show_tah_ssr0, store_tah_ssr0);
+static DEVICE_ATTR(tah_ssr1,
+	S_IRUGO | S_IWUSR, show_tah_ssr1, store_tah_ssr1);
+static DEVICE_ATTR(tah_ssr2,
+	S_IRUGO | S_IWUSR, show_tah_ssr2, store_tah_ssr2);
+static DEVICE_ATTR(tah_ssr3,
+	S_IRUGO | S_IWUSR, show_tah_ssr3, store_tah_ssr3);
+static DEVICE_ATTR(tah_ssr4,
+	S_IRUGO | S_IWUSR, show_tah_ssr4, store_tah_ssr4);
+static DEVICE_ATTR(tah_ssr5,
+	S_IRUGO | S_IWUSR, show_tah_ssr5, store_tah_ssr5);
 #endif
 
 #if defined(CONFIG_APM82181)
@@ -2836,6 +3084,15 @@ static struct attribute *ibm_newemac_attr[] = {
 	&dev_attr_coalesce_param_rx_count.attr,
 	&dev_attr_coalesce_param_tx_time.attr,
 	&dev_attr_coalesce_param_rx_time.attr,
+#endif
+
+#if defined(CONFIG_IBM_NEW_EMAC_TAH)
+	&dev_attr_tah_ssr0.attr,
+	&dev_attr_tah_ssr1.attr,
+	&dev_attr_tah_ssr2.attr,
+	&dev_attr_tah_ssr3.attr,
+	&dev_attr_tah_ssr4.attr,
+	&dev_attr_tah_ssr5.attr,
 #endif
 
 #if defined(CONFIG_APM82181)

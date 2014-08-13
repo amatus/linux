@@ -32,7 +32,7 @@
 #define DCRN_DMASR_BASE              0x120
 #endif
 
-#if defined(CONFIG_460EX) || defined(CONFIG_APM82181)
+#ifdef CONFIG_460EX || defined(CONFIG_APM82181)
 #define DCRN_DMA0_BASE               0x200
 #define DCRN_DMASR_BASE              0x220
 #endif

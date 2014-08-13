@@ -39,7 +39,8 @@
 
 const int erratum_usb09_patched = 0;
 const int deferral_on = 1;
-const int nak_deferral_delay = 8;
+int nak_deferral_delay = 20;
+module_param(nak_deferral_delay, int, 0644);
 const int nyet_deferral_delay = 1;
 
 /** @file
@@ -526,9 +527,7 @@ static int update_urb_state_xfer_comp(dwc_hc_t * _hc,
 				   DWC_OTG_HC_XFER_COMPLETE, &short_read);
 	if (short_read || (_urb->actual_length == _urb->transfer_buffer_length)) {
 		xfer_done = 1;
-		if (_urb->actual_length == _urb->transfer_buffer_length) {
-			*status = 0;
-		} else if (short_read && (_urb->transfer_flags & URB_SHORT_NOT_OK)) {
+		if (short_read && (_urb->transfer_flags & URB_SHORT_NOT_OK)) {
 			*status = -EREMOTEIO;
 		} else {
 			*status = 0;
@@ -702,7 +701,6 @@ static void release_channel(dwc_otg_hcd_t * _hcd,
 	dwc_otg_qh_t * _qh;
 	int deact = 1;
 	int retry_delay = 1;
-	unsigned long flags;
 
 	DWC_DEBUGPL(DBG_HCDV, "  %s: channel %d, halt_status %d\n", __func__,
 		      _hc->hc_num, _halt_status);
@@ -748,22 +746,15 @@ static void release_channel(dwc_otg_hcd_t * _hcd,
 	     */
 	    goto cleanup;
 	case DWC_OTG_HC_XFER_NO_HALT_STATUS:
-#ifdef CONFIG_DWC_DEBUG
 		DWC_ERROR("%s: No halt_status, channel %d\n", __func__,
 			   _hc->hc_num);
-#endif
 		free_qtd = 0;
 		break;
 	default:
 		free_qtd = 0;
 		break;
 	}
-	if (free_qtd) {
-		/* Only change must_free to true (do not set to zero here -- it is
-		 * pre-initialized to zero).
-		 */
-		*must_free = 1;
-	}
+	*must_free = free_qtd;
 	if (deact) {
 		deactivate_qh(_hcd, _hc->qh, free_qtd);
 	}
@@ -775,10 +766,19 @@ cleanup:
      */
     dwc_otg_hc_cleanup(_hcd->core_if, _hc);
 	list_add_tail(&_hc->hc_list_entry, &_hcd->free_hc_list);
-	local_irq_save(flags);
-	_hcd->available_host_channels++;
-	local_irq_restore(flags);
-
+	switch (_hc->ep_type) {
+	case DWC_OTG_EP_TYPE_CONTROL:
+	case DWC_OTG_EP_TYPE_BULK:
+		_hcd->non_periodic_channels--;
+		break;
+	default:
+	    /*
+	     * Don't release reservations for periodic channels here.
+	     * That's done when a periodic transfer is descheduled (i.e.
+	     * when the QH is removed from the periodic schedule).
+	     */
+	    break;
+	}
 	/* Try to queue more transfers now that there's a free channel, */
 	/* unless erratum_usb09_patched is set */
 	if (!erratum_usb09_patched) {
@@ -1139,6 +1139,7 @@ static int32_t handle_hc_nak_intr(dwc_otg_hcd_t * _hcd,
 		break;
 	}
 	handle_nak_done:disable_hc_int(_hc_regs, nak);
+	clear_hc_int(_hc_regs, nak);
 	return 1;
 }
 
@@ -1209,8 +1210,6 @@ static int32_t handle_hc_ack_intr(dwc_otg_hcd_t * _hcd,
 		     * automatically executes the PING, then the transfer.
 		     */
 		    halt_channel(_hcd, _hc, _qtd, DWC_OTG_HC_XFER_ACK, must_free);
-		} else {
-		    halt_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 		}
 	}
 
@@ -1219,6 +1218,7 @@ static int32_t handle_hc_ack_intr(dwc_otg_hcd_t * _hcd,
      * continue transferring data after clearing the error count.
      */
     disable_hc_int(_hc_regs, ack);
+	clear_hc_int(_hc_regs, ack);
 	return 1;
 }
 
@@ -1489,7 +1489,7 @@ static int32_t handle_hc_datatglerr_intr(dwc_otg_hcd_t * _hcd,
  * @return 1 if halt status is ok, 0 otherwise.
  */
 static inline int halt_status_ok(dwc_otg_hcd_t * _hcd,
-	dwc_hc_t * _hc, dwc_otg_hc_regs_t * _hc_regs, dwc_otg_qtd_t * _qtd, int *must_free)
+	dwc_hc_t * _hc, dwc_otg_hc_regs_t * _hc_regs, dwc_otg_qtd_t * _qtd)
 {
 	hcchar_data_t hcchar;
 	hctsiz_data_t hctsiz;
@@ -1596,8 +1596,6 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t * _hcd,
 		handle_hc_frmovrun_intr(_hcd, _hc, _hc_regs, _qtd, must_free);
 	} else if (hcint.b.datatglerr) {
 		handle_hc_datatglerr_intr(_hcd, _hc, _hc_regs, _qtd, must_free);
-		_hc->qh->data_toggle = 0;
-		halt_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 	} else if (hcint.b.nak && !hcintmsk.b.nak) {
 		/*
 	     * If nak is not masked, it's because a non-split IN transfer
@@ -1632,13 +1630,10 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t * _hcd,
 		    halt_channel(_hcd, _hc, _qtd,
 					 DWC_OTG_HC_XFER_PERIODIC_INCOMPLETE, must_free);
 		} else {
-#ifdef CONFIG_DWC_DEBUG
 			DWC_ERROR("%s: Channel %d, DMA Mode -- ChHltd set, but reason "
 			     "for halting is unknown, nyet %d, hcint 0x%08x, intsts 0x%08x\n",
 			     __func__, _hc->hc_num, hcint.b.nyet, hcint.d32,
 				 dwc_read_reg32(&_hcd->core_if->core_global_regs->gintsts));
-#endif
-			halt_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 		}
 	}
 }
@@ -1663,12 +1658,13 @@ static int32_t handle_hc_chhltd_intr(dwc_otg_hcd_t * _hcd,
 		handle_hc_chhltd_intr_dma(_hcd, _hc, _hc_regs, _qtd, must_free);
 	} else {
 #ifdef CONFIG_DWC_DEBUG
-	    if (!halt_status_ok(_hcd, _hc, _hc_regs, _qtd, must_free)) {
+	    if (!halt_status_ok(_hcd, _hc, _hc_regs, _qtd)) {
 			return 1;
 		}
 #endif	/*  */
 	    release_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 	}
+	clear_hc_int(_hc_regs, chhltd);
 	return 1;
 }
 

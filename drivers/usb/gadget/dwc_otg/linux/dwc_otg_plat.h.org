@@ -242,8 +242,6 @@ static inline uint32_t SET_DEBUG_LEVEL( const uint32_t _new )
  *  mode. */
 #define DBG_HCD_URB	(0x800)
 
-#define DBG_SP		(0x400)
-
 /** When debug level has any bit set, display debug messages */
 #define DBG_ANY		(0xFF)
 
@@ -270,7 +268,7 @@ static inline uint32_t SET_DEBUG_LEVEL( const uint32_t _new )
  * usb-DWC_otg: dwc_otg_cil_init(ca867000)
  * </code>
  */
-#ifdef CONFIG_DWC_DEBUG
+#ifdef DEBUG
 # define DWC_DEBUGPL(lvl, x...) do{ if ((lvl)&g_dbg_lvl)printk( KERN_ERR USB_DWC x ); }while(0)
 # define DWC_DEBUGP(x...)	DWC_DEBUGPL(DBG_ANY, x )
 

@@ -228,7 +228,6 @@ static int __devinit of_flash_probe(struct of_device *dev,
 				" tree\n");
 			goto err_out;
 		}
-
 		dev_dbg(&dev->dev, "of_flash device: %.8llx-%.8llx\n",
 			(unsigned long long)res.start,
 			(unsigned long long)res.end);
@@ -347,10 +346,6 @@ err_flash_remove:
 
 static struct of_device_id of_flash_match[] = {
 	{
-		.compatible	= "cfi-flash",
-		.data		= (void *)"cfi_probe",
-	},
-	{
 		/* FIXME: JEDEC chips can't be safely and reliably
 		 * probed, although the mtd code gets it right in
 		 * practice most of the time.  We should use the
@@ -360,6 +355,10 @@ static struct of_device_id of_flash_match[] = {
 		 * :(. */
 		.compatible	= "jedec-flash",
 		.data		= (void *)"jedec_probe",
+	},
+	{
+		.compatible	= "cfi-flash",
+		.data		= (void *)"cfi_probe",
 	},
 	{
 		.compatible     = "mtd-ram",

@@ -101,7 +101,7 @@
 			compatible = "amcc,ppc405ex-crypto", "amcc,ppc4xx-crypto";
 			reg = <0xef700000 0x80400>;
 			interrupt-parent = <&UIC0>;
-			interrupts = <0x17 0x2>;
+			interrupts = <0x17 0x4>;
 		};
 
 		MAL0: mcmal {
@@ -110,7 +110,7 @@
 			num-tx-chans = <2>;
 			num-rx-chans = <2>;
 			interrupt-parent = <&MAL0>;
-			interrupts = <0x0 0x1 0x2 0x3 0x4>;
+			interrupts = <0x0 0x1 0x2 0x3 0x4 0x5 0x6 0x7 0x8>;
 			#interrupt-cells = <1>;
 			#address-cells = <0>;
 			#size-cells = <0>;
@@ -118,7 +118,11 @@
 					/*RXEOB*/ 0x1 &UIC0 0xb 0x4
 					/*SERR*/  0x2 &UIC1 0x0 0x4
 					/*TXDE*/  0x3 &UIC1 0x1 0x4
-					/*RXDE*/  0x4 &UIC1 0x2 0x4>;
+					/*RXDE*/  0x4 &UIC1 0x2 0x4
+					/*TX0 COAL*/  0x5 &UIC2 0x7 0x2
+					/*TX1 COAL*/  0x6 &UIC2 0x8 0x2
+					/*RX0 COAL*/  0x7 &UIC2 0x9 0x2
+					/*RX1 COAL*/  0x8 &UIC2 0xa 0x2 >;
 			interrupt-map-mask = <0xffffffff>;
 		};
 
@@ -270,7 +274,7 @@
 				mal-rx-channel = <0>;
 				cell-index = <0>;
 				max-frame-size = <9000>;
-				rx-fifo-size = <4096>;
+				rx-fifo-size = <16384>;
 				tx-fifo-size = <2048>;
 				phy-mode = "rgmii";
 				phy-map = <0x00000000>;
@@ -298,7 +302,7 @@
 				mal-rx-channel = <1>;
 				cell-index = <1>;
 				max-frame-size = <9000>;
-				rx-fifo-size = <4096>;
+				rx-fifo-size = <16384>;
 				tx-fifo-size = <2048>;
 				phy-mode = "rgmii";
 				phy-map = <0x00000000>;

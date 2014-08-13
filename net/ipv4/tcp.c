@@ -610,7 +610,7 @@ ssize_t tcp_splice_read(struct socket *sock, loff_t *ppos,
 	/*
 	 * We can't seek on a socket input
 	 */
-	if (unlikely(*ppos))
+	if (unlikely(ppos))
 		return -ESPIPE;
 
 	ret = spliced = 0;
@@ -623,8 +623,12 @@ ssize_t tcp_splice_read(struct socket *sock, loff_t *ppos,
 		if (ret < 0)
 			break;
 		else if (!ret) {
-			if (spliced)
+			if (spliced >= len)
 				break;
+			if (flags & SPLICE_F_NONBLOCK) {
+				ret = -EAGAIN;
+				break;
+			}
 			if (sock_flag(sk, SOCK_DONE))
 				break;
 			if (sk->sk_err) {
@@ -1334,6 +1338,7 @@ int tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 		sk_eat_skb(sk, skb, 0);
 		if (!desc->count)
 			break;
+                tp->copied_seq = seq;
 	}
 	tp->copied_seq = seq;
 

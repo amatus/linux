@@ -195,6 +195,23 @@ config AMCC_PPC440SPE_ADMA
 	help
 	  Enable support for the AMCC PPC440SPe RAID engines.
 
+config AMCC_PPC460EX_460GT_4CHAN_DMA
+	tristate "AMCC PPC460EX PPC460GT PLB DMA support"
+	depends on 460EX || 460GT || APM821xx
+	select DMA_ENGINE
+	default y
+
+config APM82181_ADMA
+	tristate "APM82181 Asynchonous DMA support"
+	depends on APM821xx
+	select ASYNC_CORE
+	select ASYNC_TX_DMA
+	select DMA_ENGINE
+	select ARCH_HAS_ASYNC_TX_FIND_CHANNEL
+	default y
+	---help---
+	  Enable support for the APM82181 Asynchonous DMA engines.
+
 config TIMB_DMA
 	tristate "Timberdale FPGA DMA support"
 	depends on MFD_TIMBERDALE

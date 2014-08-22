@@ -1,1 +1,3 @@
 obj-$(CONFIG_AMCC_PPC440SPE_ADMA) += adma.o
+obj-$(CONFIG_AMCC_PPC460EX_460GT_4CHAN_DMA) += ppc460ex_4chan_dma.o
+obj-$(CONFIG_APM82181_ADMA) += apm82181-adma.o

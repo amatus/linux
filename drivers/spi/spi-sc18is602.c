@@ -15,6 +15,7 @@
 #include <linux/of.h>
 #include <linux/platform_data/sc18is602.h>
 #include <linux/gpio/consumer.h>
+#include <linux/gpio/driver.h>
 
 enum chips { sc18is602, sc18is602b, sc18is603, sc18is606 };
 
@@ -28,6 +29,18 @@ enum chips { sc18is602, sc18is602b, sc18is603, sc18is606 };
 #define SC18IS602_MODE_CLOCK_DIV_16	0x1
 #define SC18IS602_MODE_CLOCK_DIV_64	0x2
 #define SC18IS602_MODE_CLOCK_DIV_128	0x3
+
+/* GPIO register addresses */
+#define SC18IS602_REG_GPIO_ENABLE 0xF6
+#define SC18IS602_REG_GPIO_CONFIG 0xF7
+#define SC18IS602_REG_GPIO_WRITE  0xF4
+#define SC18IS602_REG_GPIO_READ   0xF5
+
+/* GPIO configuration bits */
+#define SC18IS602_GPIO_CONF_QUASI_BIDIR 0x0
+#define SC18IS602_GPIO_CONF_PUSH_PULL   0x1
+#define SC18IS602_GPIO_CONF_INPUT_ONLY  0x2
+#define SC18IS602_GPIO_CONF_OPEN_DRAIN  0x3
 
 struct sc18is602 {
 	struct spi_controller	*host;
@@ -45,6 +58,13 @@ struct sc18is602 {
 	int			rindex;	/* Receive data index in buffer */
 
 	struct gpio_desc	*reset;
+
+	/* GPIO data */
+	struct gpio_chip	gc;
+	u8			gpio_enable;  /* GPIO enable mask */
+	u8			gpio_config;  /* GPIO configuration */
+	u8			gpio_state;   /* GPIO output state */
+	struct mutex		gpio_lock; /* GPIO access lock */
 };
 
 static int sc18is602_wait_ready(struct sc18is602 *hw, int len)
@@ -239,6 +259,192 @@ static int sc18is602_setup(struct spi_device *spi)
 	return 0;
 }
 
+#ifdef CONFIG_GPIOLIB
+/*
+ * GPIO chip functions
+ */
+static int sc18is602_gpio_get_direction(struct gpio_chip *gc, unsigned int offset)
+{
+	struct sc18is602 *hw = gpiochip_get_data(gc);
+	u8 config_bits = (hw->gpio_config >> (offset * 2)) & 0x3;
+
+	return (config_bits == SC18IS602_GPIO_CONF_INPUT_ONLY) ? 
+		GPIO_LINE_DIRECTION_IN : GPIO_LINE_DIRECTION_OUT;
+}
+
+static int sc18is602_gpio_direction_input(struct gpio_chip *gc, unsigned int offset)
+{
+	struct sc18is602 *hw = gpiochip_get_data(gc);
+	u8 config_bits;
+	int ret;
+
+	mutex_lock(&hw->gpio_lock);
+
+	/* Set pin configuration to input-only */
+	config_bits = hw->gpio_config;
+	config_bits &= ~(0x3 << (offset * 2));
+	config_bits |= SC18IS602_GPIO_CONF_INPUT_ONLY << (offset * 2);
+
+	ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_CONFIG, config_bits);
+	if (ret >= 0) {
+		hw->gpio_config = config_bits;
+	}
+
+	mutex_unlock(&hw->gpio_lock);
+	return ret;
+}
+
+static int sc18is602_gpio_direction_output(struct gpio_chip *gc, unsigned int offset, int value)
+{
+	struct sc18is602 *hw = gpiochip_get_data(gc);
+	u8 config_bits, state_bits;
+	int ret;
+
+	mutex_lock(&hw->gpio_lock);
+
+	/* Set pin configuration to push-pull output */
+	config_bits = hw->gpio_config;
+	config_bits &= ~(0x3 << (offset * 2));
+	config_bits |= SC18IS602_GPIO_CONF_PUSH_PULL << (offset * 2);
+
+	/* Set output value */
+	state_bits = hw->gpio_state;
+	if (value)
+		state_bits |= BIT(offset);
+	else
+		state_bits &= ~BIT(offset);
+
+	ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_CONFIG, config_bits);
+	if (ret >= 0) {
+		ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_WRITE, state_bits);
+		if (ret >= 0) {
+			hw->gpio_config = config_bits;
+			hw->gpio_state = state_bits;
+		}
+	}
+
+	mutex_unlock(&hw->gpio_lock);
+	return ret;
+}
+
+static int sc18is602_gpio_get(struct gpio_chip *gc, unsigned int offset)
+{
+	struct sc18is602 *hw = gpiochip_get_data(gc);
+	int ret;
+
+	mutex_lock(&hw->gpio_lock);
+	ret = i2c_smbus_read_byte_data(hw->client, SC18IS602_REG_GPIO_READ);
+	mutex_unlock(&hw->gpio_lock);
+
+	if (ret < 0)
+		return ret;
+
+	return !!(ret & BIT(offset));
+}
+
+static void sc18is602_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
+{
+	struct sc18is602 *hw = gpiochip_get_data(gc);
+	u8 state_bits;
+
+	mutex_lock(&hw->gpio_lock);
+
+	state_bits = hw->gpio_state;
+	if (value)
+		state_bits |= BIT(offset);
+	else
+		state_bits &= ~BIT(offset);
+
+	if (i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_WRITE, state_bits) >= 0) {
+		hw->gpio_state = state_bits;
+	}
+
+	mutex_unlock(&hw->gpio_lock);
+}
+
+static int sc18is602_gpio_request(struct gpio_chip *gc, unsigned int offset)
+{
+	struct sc18is602 *hw = gpiochip_get_data(gc);
+	int ret;
+
+	mutex_lock(&hw->gpio_lock);
+
+	/* Enable GPIO mode for this pin */
+	hw->gpio_enable |= BIT(offset);
+	ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_ENABLE, hw->gpio_enable);
+
+	mutex_unlock(&hw->gpio_lock);
+	return ret;
+}
+
+static void sc18is602_gpio_free(struct gpio_chip *gc, unsigned int offset)
+{
+	struct sc18is602 *hw = gpiochip_get_data(gc);
+
+	mutex_lock(&hw->gpio_lock);
+
+	/* Disable GPIO mode for this pin (return to SPI mode) */
+	hw->gpio_enable &= ~BIT(offset);
+	i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_ENABLE, hw->gpio_enable);
+
+	mutex_unlock(&hw->gpio_lock);
+}
+
+static int sc18is602_gpio_init(struct sc18is602 *hw)
+{
+	struct device *dev = hw->dev;
+	int ret, ngpio;
+
+	mutex_init(&hw->gpio_lock);
+
+	/* Initialize GPIO state */
+	hw->gpio_enable = 0;
+	hw->gpio_config = 0;
+	hw->gpio_state = 0;
+
+	/* Determine number of GPIO pins based on chip type */
+	switch (hw->id) {
+	case sc18is602:
+	case sc18is602b:
+		ngpio = 4; /* SS0, SS1, SS2, SS3 */
+		break;
+	case sc18is603:
+		ngpio = 3; /* SS0, SS1, SS2 (SS2 is GPIO-only) */
+		break;
+	case sc18is606:
+		ngpio = 3; /* SS0, SS1, SS2 */
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	hw->gc.label = dev_name(dev);
+	hw->gc.parent = dev;
+	hw->gc.owner = THIS_MODULE;
+	hw->gc.base = -1;
+	hw->gc.ngpio = ngpio;
+	hw->gc.can_sleep = true;
+	hw->gc.get_direction = sc18is602_gpio_get_direction;
+	hw->gc.direction_input = sc18is602_gpio_direction_input;
+	hw->gc.direction_output = sc18is602_gpio_direction_output;
+	hw->gc.get = sc18is602_gpio_get;
+	hw->gc.set = sc18is602_gpio_set;
+	hw->gc.request = sc18is602_gpio_request;
+	hw->gc.free = sc18is602_gpio_free;
+
+	ret = devm_gpiochip_add_data(dev, &hw->gc, hw);
+	if (ret)
+		dev_err(dev, "Failed to add GPIO chip: %d\n", ret);
+
+	return ret;
+}
+#else
+static int sc18is602_gpio_init(struct sc18is602 *hw)
+{
+	return 0;
+}
+#endif /* CONFIG_GPIOLIB */
+
 static int sc18is602_probe(struct i2c_client *client)
 {
 	const struct i2c_device_id *id = i2c_client_get_device_id(client);
@@ -247,6 +453,7 @@ static int sc18is602_probe(struct i2c_client *client)
 	struct sc18is602_platform_data *pdata = dev_get_platdata(dev);
 	struct sc18is602 *hw;
 	struct spi_controller *host;
+	int ret;
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C |
 				     I2C_FUNC_SMBUS_WRITE_BYTE_DATA))
@@ -314,6 +521,13 @@ static int sc18is602_probe(struct i2c_client *client)
 	host->dev.of_node = np;
 	host->min_speed_hz = hw->freq / 128;
 	host->max_speed_hz = hw->freq / 4;
+
+	/* Initialize GPIO functionality */
+	ret = sc18is602_gpio_init(hw);
+	if (ret) {
+		dev_err(dev, "Failed to initialize GPIO: %d\n", ret);
+		return ret;
+	}
 
 	return devm_spi_register_controller(dev, host);
 }

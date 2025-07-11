@@ -314,12 +314,12 @@ static int sc18is602_gpio_direction_output(struct gpio_chip *gc, unsigned int of
 	else
 		state_bits &= ~BIT(offset);
 
-	ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_CONFIG, config_bits);
+	ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_WRITE, state_bits);
 	if (ret >= 0) {
-		ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_WRITE, state_bits);
+		hw->gpio_state = state_bits;
+		ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_CONFIG, config_bits);
 		if (ret >= 0) {
 			hw->gpio_config = config_bits;
-			hw->gpio_state = state_bits;
 		}
 	}
 

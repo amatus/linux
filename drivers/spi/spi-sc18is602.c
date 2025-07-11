@@ -365,13 +365,20 @@ static void sc18is602_gpio_set(struct gpio_chip *gc, unsigned int offset, int va
 static int sc18is602_gpio_request(struct gpio_chip *gc, unsigned int offset)
 {
 	struct sc18is602 *hw = gpiochip_get_data(gc);
+	u8 enable_bits;
 	int ret;
 
 	mutex_lock(&hw->gpio_lock);
 
 	/* Enable GPIO mode for this pin */
-	hw->gpio_enable |= BIT(offset);
+	enable_bits = hw->gpio_enable;
+	enable_bits |= BIT(offset);
 	ret = i2c_smbus_write_byte_data(hw->client, SC18IS602_REG_GPIO_ENABLE, hw->gpio_enable);
+	if (ret >= 0) {
+		hw->gpio_enable = enable_bits;
+		hw->gpio_config &= ~(0x3 << (offset * 2));
+		hw->gpio_config |= SC18IS602_GPIO_CONF_INPUT_ONLY << (offset * 2);
+	}
 
 	mutex_unlock(&hw->gpio_lock);
 	return ret;
